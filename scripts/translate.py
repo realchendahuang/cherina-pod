@@ -15,7 +15,6 @@
 
 import json
 import os
-import random
 import sys
 import time
 import urllib.error
@@ -23,7 +22,9 @@ import urllib.request
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-ROOT = HERE.parent
+sys.path.insert(0, str(HERE))
+from common import UA, load_env, norm_text  # noqa: E402
+
 MODEL = "deepseek-v4-flash"
 
 # preferred=True 主用（ollama-cloud 质量稳定、简体）；preferred=False 仅作 fallback
@@ -49,16 +50,6 @@ try:
     _T2S = opencc.OpenCC("t2s")
 except ImportError:
     _T2S = None
-
-
-def load_env():
-    env_path = ROOT / ".env"
-    if env_path.exists():
-        for line in env_path.read_text().splitlines():
-            line = line.strip()
-            if line and not line.startswith("#") and "=" in line:
-                k, _, v = line.partition("=")
-                os.environ.setdefault(k.strip(), v.strip())
 
 
 def available_providers():
@@ -90,7 +81,7 @@ def chat_completion(provider, messages, max_tokens=3000, timeout=300):
             "Content-Type": "application/json",
             "Authorization": f"Bearer {os.environ.get(provider['key_env'])}",
             # Cloudflare 拦截默认 urllib UA（error 1010），需伪装浏览器 UA
-            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36",
+            "User-Agent": UA,
         },
     )
     try:
@@ -203,8 +194,8 @@ def translate_sentences(
     from concurrent.futures import ThreadPoolExecutor, as_completed
 
     results = list(resume) if resume else []
-    done_en = {r["en"] for r in results}
-    pending = [s for s in sentences if s["text"] not in done_en]
+    done_en = {norm_text(r["en"]) for r in results}
+    pending = [s for s in sentences if norm_text(s["text"]) not in done_en]
 
     # 供应商顺序：preferred 优先，fallback 兜底（不做随机轮询，保质量稳定）
     order = sorted(providers, key=lambda p: 0 if p.get("preferred") else 1)

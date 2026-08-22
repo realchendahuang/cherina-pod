@@ -20,6 +20,7 @@
 import hashlib
 import hmac
 import json
+import os
 import shutil
 import sys
 import urllib.error
@@ -33,30 +34,14 @@ ROOT = HERE.parent
 EPISODES = ROOT / "episodes"
 PUBLIC = ROOT / "web" / "public"
 
-import os
-
-
-def load_env():
-    """读取 .env 到环境变量（不覆盖已有值）。"""
-    env_path = ROOT / ".env"
-    if env_path.exists():
-        for line in env_path.read_text().splitlines():
-            line = line.strip()
-            if line and not line.startswith("#") and "=" in line:
-                k, _, v = line.partition("=")
-                os.environ.setdefault(k.strip(), v.strip())
+sys.path.insert(0, str(HERE))
+from common import UA, load_env  # noqa: E402
 
 
 # ---------- 极简 S3 客户端（SigV4，仅 HEAD/PUT，够上传用） ----------
 
 # 走公网（CF 边缘）时必须带浏览器 UA：urllib 默认 Python-urllib/x.y 会被
 # Cloudflare Bot Fight Mode 直接拦（HTTP 403 error code 1010）
-S3_UA = (
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36 cherina-pod"
-)
-
-
 class S3Client:
     def __init__(self, endpoint, access_key, secret_key, bucket, region="us-east-1", fallbacks=()):
         self.endpoints = [endpoint.rstrip("/")] + [e.rstrip("/") for e in fallbacks if e]
@@ -108,9 +93,11 @@ class S3Client:
         payload_hash = hashlib.sha256(body).hexdigest()
         # 只签 host + x-amz-* 三个头（与 mc 行为一致；RustFS beta 对签入业务头的请求校验有问题）
         for ep in list(self.endpoints):
+            if ep in self._dead:
+                continue  # 该端点已失败，直接跳过
             parsed = urllib.parse.urlparse(ep)
             headers = self._sign(method, path, payload_hash, {"host": parsed.netloc}, datetime.now(timezone.utc))
-            headers["User-Agent"] = S3_UA
+            headers["User-Agent"] = UA
             if extra_headers:
                 headers.update(extra_headers)
             req = urllib.request.Request(

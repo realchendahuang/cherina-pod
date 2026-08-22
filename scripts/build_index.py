@@ -8,7 +8,6 @@
   输出 episodes/index.json
 """
 
-import html
 import json
 import re
 import sys
@@ -17,12 +16,8 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 EPISODES_ROOT = HERE.parent / "episodes"
 
-
-def clean_text(s: str) -> str:
-    """去 HTML 标签 + 反转义实体，供摘要展示。"""
-    s = re.sub(r"<[^>]+>", " ", s or "")
-    s = html.unescape(s)
-    return re.sub(r"\s+", " ", s).strip()
+sys.path.insert(0, str(HERE))
+from common import strip_html  # noqa: E402
 
 
 def fmt_duration(d) -> str:
@@ -79,7 +74,7 @@ def main():
                 "level": meta.get("level", "intermediate"),
                 "episode_title": data.get("episode", {}).get("title", ""),
                 "episode_title_zh": data.get("episode", {}).get("title_zh", ""),
-                "description": clean_text(data.get("episode", {}).get("description", ""))[:200],
+                "description": strip_html(data.get("episode", {}).get("description", ""))[:200],
                 "image": data.get("episode", {}).get("image", "")
                 or data.get("podcast", {}).get("image", ""),
                 "pub_date": data.get("episode", {}).get("pub_date", ""),

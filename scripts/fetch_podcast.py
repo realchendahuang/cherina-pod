@@ -17,28 +17,14 @@ import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
 
+HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, HERE)
+from common import UA, http_get, http_json, strip_html  # noqa: E402
+
 ITUNES_SEARCH = "https://itunes.apple.com/search"
 ITUNES_LOOKUP = "https://itunes.apple.com/lookup"
 ITUNES_NS = "{http://www.itunes.com/dtds/podcast-1.0.dtd}"
-EPISODES_ROOT = os.path.join(os.path.dirname(__file__), "..", "episodes")
-
-UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 cherina-pod"
-
-
-def http_get(url, timeout=60):
-    req = urllib.request.Request(url, headers={"User-Agent": UA})
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
-        return resp.read()
-
-
-def strip_html(s):
-    """去掉 HTML 标签与实体，返回纯文本。"""
-    if not s:
-        return ""
-    s = re.sub(r"<[^>]+>", "", s)
-    s = s.replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">")
-    s = s.replace("&quot;", '"').replace("&#39;", "'").replace("&nbsp;", " ")
-    return re.sub(r"\s+", " ", s).strip()
+EPISODES_ROOT = os.path.join(HERE, "..", "episodes")
 
 
 def fmt_pub_date(rfc822):
@@ -50,11 +36,7 @@ def fmt_pub_date(rfc822):
         t = email.utils.parsedate_to_datetime(rfc822)
         return t.strftime("%Y-%m-%d")
     except Exception:
-        return rfc822[:16]
-
-
-def http_json(url):
-    return json.loads(http_get(url).decode("utf-8"))
+        return ""
 
 
 def slugify(s):

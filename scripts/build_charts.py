@@ -14,24 +14,18 @@ import argparse
 import json
 import re
 import sys
-import urllib.request
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
 
-UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36"
+sys.path.insert(0, str(HERE))
+from common import http_json  # noqa: E402
 
 
 def norm(s: str) -> str:
     """标题归一化用于匹配：小写、去标点空白。"""
     return re.sub(r"[^0-9a-z\u4e00-\u9fff]+", "", (s or "").lower())
-
-
-def fetch_json(url: str) -> dict:
-    req = urllib.request.Request(url, headers={"User-Agent": UA})
-    with urllib.request.urlopen(req, timeout=30) as resp:
-        return json.loads(resp.read().decode("utf-8"))
 
 
 def main():
@@ -55,7 +49,12 @@ def main():
 
     url = f"https://rss.applemarketingtools.com/api/v2/{args.country}/podcasts/top/{args.limit}/podcasts.json"
     print(f"抓取榜单：{url}")
-    feed = fetch_json(url)["feed"]
+    try:
+        feed = http_json(url, timeout=30)["feed"]
+    except Exception as e:
+        # 榜单是增强内容，抓取失败不阻塞发布（前端 loadCharts 也会降级），保留上次结果
+        print(f"⚠️ 抓取榜单失败：{e}，保留上次 charts.json", file=sys.stderr)
+        return 0
 
     items = []
     hits = 0

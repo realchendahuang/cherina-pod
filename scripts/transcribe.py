@@ -29,18 +29,8 @@ BASE = "https://dashscope.aliyuncs.com"
 MODEL = "paraformer-v2"
 
 HERE = Path(__file__).resolve().parent
-ROOT = HERE.parent
-
-
-def load_env():
-    """读取 .env 到环境变量（不覆盖已有值）。"""
-    env_path = ROOT / ".env"
-    if env_path.exists():
-        for line in env_path.read_text().splitlines():
-            line = line.strip()
-            if line and not line.startswith("#") and "=" in line:
-                k, _, v = line.partition("=")
-                os.environ.setdefault(k.strip(), v.strip())
+sys.path.insert(0, str(HERE))
+from common import load_env  # noqa: E402
 
 
 def api_key() -> str:

@@ -6,10 +6,14 @@
   输出 <episode_dir>/bilingual.json
 """
 
+import datetime
 import json
-import re
 import sys
 from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE))
+from common import norm_text  # noqa: E402
 
 
 def main():
@@ -32,18 +36,15 @@ def main():
     # 以 transcript 句子为准（时间戳权威），按文本从翻译结果取译文。
     # 并发翻译/断点续跑会产生冗余条目（旧时间戳、重复文本），以 transcript 为骨架可全部规避。
     # 匹配键去掉全部空白：ASR 偶发缺空格（如 "hegrown up"），LLM 译文会修正，精确匹配会漏。
-    def _norm(s):
-        return re.sub(r"\s+", "", s or "")
-
     zh_by_text = {}
     for t in translation:
-        zh_by_text.setdefault(_norm(t["en"]), t["zh"])
+        zh_by_text.setdefault(norm_text(t["en"]), t["zh"])
 
     pairs = []
     missing = 0
     for s in transcript["sentences"]:
         text = s["text"]
-        zh = zh_by_text.get(_norm(text))
+        zh = zh_by_text.get(norm_text(text))
         if zh is None:
             missing += 1
             zh = ""
@@ -73,9 +74,7 @@ def main():
         "audio": meta["audio_path"],
         "duration": transcript.get("duration", 0),
         "pairs": pairs,
-        "generated_at": __import__("datetime")
-        .datetime.now()
-        .isoformat(timespec="seconds"),
+        "generated_at": datetime.datetime.now().isoformat(timespec="seconds"),
     }
 
     out = ep_dir / "bilingual.json"
