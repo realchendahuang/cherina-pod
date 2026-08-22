@@ -1,0 +1,32 @@
+# OS
+.DS_Store
+.DS_Store?
+._*
+
+# 密钥（严禁提交）
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# Node / Cloudflare
+node_modules/
+.wrangler/
+.dev.vars
+
+# 播客音频与中间产物（只提交双语 JSON）
+episodes/*/audio/
+web/public/episodes/*/audio/
+episodes/*/transcript.json
+episodes/*/translation.json
+episodes/*/*.mp3
+episodes/*/*.m4a
+episodes/*/*.wav
