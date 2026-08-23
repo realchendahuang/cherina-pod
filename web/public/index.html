@@ -423,16 +423,47 @@
     margin-top: 4px;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
-  .level-pill {
-    display: inline-block;
-    margin-top: 6px;
-    padding: 2px 7px;
+  /* 一句话简介：卡片帮用户做"这适合我吗/值得听吗"的判断 */
+  .mini-card .desc {
     font-size: var(--app-text-micro);
-    font-weight: 700;
     color: var(--app-text-secondary);
-    background: var(--app-surface-warm);
-    border: 1px solid var(--app-border);
+    line-height: 1.5;
+    margin-top: 4px;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  }
+  .cont-card .cover-wrap::after {
+    content: '';
+    position: absolute; inset: 0;
+    background: linear-gradient(to top, rgba(0,0,0,.28), transparent 40%);
+    border-radius: inherit;
+  }
+  .cont-badge {
+    position: absolute; right: 8px; bottom: 8px; z-index: 1;
+    padding: 2px 8px;
+    font-size: var(--app-text-micro);
+    font-weight: 800;
+    color: #fff;
+    background: rgba(0,0,0,.55);
     border-radius: var(--app-radius-pill);
+    backdrop-filter: blur(4px);
+  }
+  .cont-bar {
+    height: 4px;
+    margin-top: 8px;
+    border-radius: var(--app-radius-pill);
+    background: var(--app-surface-muted);
+    overflow: hidden;
+  }
+  .cont-fill {
+    height: 100%;
+    border-radius: var(--app-radius-pill);
+    background: var(--app-action-accent);
+  }
+  .cont-note {
+    font-size: var(--app-text-micro);
+    color: var(--app-action-accent);
+    font-weight: 700;
+    margin-top: 4px;
   }
 
   /* ================= 频道页 ================= */
@@ -1470,63 +1501,68 @@ async function renderDiscover() {
     })),
   });
 
-  // 学习首页组织：水平 → 题材 → 最新 → 全部频道 → 榜单
-  const levelBuckets = { beginner: [], intermediate: [], advanced: [] };
+  // 内容型首页组织：继续听 → 内容主题 → 最新 → 全部频道 → 榜单
   const catBuckets = {};
   for (const it of items) {
-    const level = it.level || 'intermediate';
-    if (levelBuckets[level]) levelBuckets[level].push(it);
     const cat = it.category || '其他';
     (catBuckets[cat] || (catBuckets[cat] = [])).push(it);
   }
 
-  // 固定题材顺序，只渲染非空桶
+  // 内容主题（兴趣导向），固定顺序只渲染非空桶
   const CAT_ORDER = ['英语学习', '商业财经', '科技认知', '新闻纪实'];
-  const LEVEL_META = {
-    beginner:     { zh: '初级', en: 'Beginner' },
-    intermediate: { zh: '中级', en: 'Intermediate' },
-    advanced:     { zh: '高级', en: 'Advanced' },
+  const CAT_SUB = {
+    '英语学习': 'English Learning',
+    '商业财经': 'Business & Money',
+    '科技认知': 'Science & Curiosity',
+    '新闻纪实': 'News & the World',
   };
-  const LEVEL_ORDER = ['beginner', 'intermediate', 'advanced'];
 
   const ts = s => { const n = Date.parse(s); return isNaN(n) ? 0 : n; };
   const latest = items.slice().sort((a, b) => {
     return ts(b.generated_at || b.pub_date) - ts(a.generated_at || a.pub_date);
   }).slice(0, 14);
 
-  function railSection(title, list, extraCls) {
+  function railSection(title, sub, list, extraCls) {
     if (!list || !list.length) return '';
     return (
       '<section class="section ' + (extraCls || '') + '">' +
-        '<div class="section-head"><h2>' + escapeHtml(title) + '</h2></div>' +
+        '<div class="section-head"><h2>' + escapeHtml(title) + '</h2>' +
+          (sub ? '<span class="sub">' + escapeHtml(sub) + '</span>' : '') + '</div>' +
         '<div class="rail-scroll">' + list.map(miniCardHtml).join('') + '</div>' +
       '</section>'
     );
   }
 
-  let levelHtml = '';
-  for (const lv of LEVEL_ORDER) {
-    const list = levelBuckets[lv];
-    if (!list.length) continue;
-    const meta = LEVEL_META[lv];
-    levelHtml += railSection(meta.zh + ' · ' + meta.en, list, 'level-rail level-' + lv);
-  }
-
   let catHtml = '';
   for (const cat of CAT_ORDER) {
     if (catBuckets[cat] && catBuckets[cat].length) {
-      catHtml += railSection(cat, catBuckets[cat], 'cat-rail');
+      catHtml += railSection(cat, CAT_SUB[cat] || '', catBuckets[cat], 'cat-rail');
     }
+  }
+
+  // 继续听：读 localStorage 里各期收听进度，按最近收听排序，取前 4
+  const continuing = items
+    .map(it => ({ it, prefs: loadEpPrefs(it.id) }))
+    .filter(x => x.prefs && typeof x.prefs.t === 'number' && x.prefs.t > 0)
+    .sort((a, b) => (b.prefs.ts || 0) - (a.prefs.ts || 0))
+    .slice(0, 4);
+  let continueHtml = '';
+  if (continuing.length) {
+    continueHtml =
+      '<section class="section continue-section">' +
+        '<div class="section-head"><h2>继续听</h2><span class="sub">上次听到这</span></div>' +
+        '<div class="rail-scroll">' + continuing.map(x => continueCardHtml(x.it, x.prefs)).join('') + '</div>' +
+      '</section>';
   }
 
   app.innerHTML =
     '<div class="search-wrap">' +
       '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>' +
-      '<input class="search-input" id="searchInput" type="search" placeholder="搜索双语库与热门榜单（中 / 英）…" autocomplete="off">' +
+      '<input class="search-input" id="searchInput" type="search" placeholder="搜索节目、播客或句子…" autocomplete="off">' +
     '</div>' +
 
     '<div id="discoverMain">' +
-      levelHtml +
+      continueHtml +
       catHtml +
 
       '<section class="section">' +
@@ -1612,9 +1648,12 @@ function miniCardHtml(it) {
   const titleEn = it.episode_title || '';
   const main = titleZh || titleEn;
   const sub = titleZh ? titleEn : '';
-  const levelLabel = { beginner: '初级', intermediate: '中级', advanced: '高级' }[it.level] || '';
+  const levelLabel = { beginner: '入门', intermediate: '进阶', advanced: '高级' }[it.level] || '';
+  // 一句话简介：用 D1 已存的完整 description，去 HTML 后截断
+  const desc = (it.description || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
   const metaParts = [it.podcast_title || it.podcast_title_zh || ''];
-  if (it.duration) metaParts.push(it.duration);
+  if (it.duration) metaParts.push(fmtDuration(it.duration));
+  if (levelLabel) metaParts.push(levelLabel);
   return (
     '<div class="mini-card" data-go="ep:' + encodeURIComponent(it.id) + '" tabindex="0" role="link">' +
       '<div class="cover-wrap">' + coverHtml(it.image, 'cover', it.podcast_title) + '</div>' +
@@ -1622,7 +1661,26 @@ function miniCardHtml(it) {
         '<div class="t-zh">' + escapeHtml(main) + '</div>' +
         (sub ? '<div class="t-en">' + escapeHtml(sub) + '</div>' : '') +
         '<div class="meta">' + metaParts.map(escapeHtml).join(' · ') + '</div>' +
-        (levelLabel ? '<span class="level-pill">' + escapeHtml(levelLabel) + '</span>' : '') +
+        (desc ? '<div class="desc">' + escapeHtml(desc) + '</div>' : '') +
+      '</div>' +
+    '</div>'
+  );
+}
+
+/* 继续听卡片：带进度条 + 上次听到时间 */
+function continueCardHtml(it, prefs) {
+  const total = parseDuration(it.duration);
+  const pct = total > 0 ? Math.min(100, Math.round((prefs.t / total) * 100)) : 0;
+  return (
+    '<div class="mini-card cont-card" data-go="ep:' + encodeURIComponent(it.id) + '" tabindex="0" role="link">' +
+      '<div class="cover-wrap">' + coverHtml(it.image, 'cover', it.podcast_title) +
+        (pct > 0 ? '<div class="cont-badge">' + pct + '%</div>' : '') +
+      '</div>' +
+      '<div class="body">' +
+        '<div class="t-zh">' + escapeHtml(it.episode_title_zh || it.episode_title || '') + '</div>' +
+        '<div class="meta">' + escapeHtml(it.podcast_title || it.podcast_title_zh || '') + '</div>' +
+        '<div class="cont-bar"><div class="cont-fill" style="width:' + pct + '%"></div></div>' +
+        '<div class="cont-note">听到 ' + escapeHtml(fmtTime(prefs.t)) + ' · 继续</div>' +
       '</div>' +
     '</div>'
   );
@@ -1946,6 +2004,7 @@ function saveEpPrefs() {
     mode: ep.mode,
     font: ep.fontScale,
     follow: ep.follow,
+    ts: Date.now(),
   };
   try { localStorage.setItem(epStoreKey(ep.id), JSON.stringify(prefs)); } catch (e) { /* 忽略 */ }
 }
