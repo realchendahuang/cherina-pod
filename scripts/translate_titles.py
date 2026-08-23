@@ -77,7 +77,7 @@ def main():
         updated += 1
         print(f"  {ep_id}: {data['episode']['title_zh']}")
 
-    print(f"✅ 已更新 {updated} 期中文标题，下一步：重跑 align.py + build_index.py + sync_web.py")
+    print(f"✅ 已更新 {updated} 期中文标题，下一步：重跑 align.py + migrate_to_d1.py + sync_web.py")
     return 0
 
 

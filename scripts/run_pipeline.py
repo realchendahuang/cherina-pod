@@ -79,7 +79,7 @@ def main():
         return 1
 
     print("\n🎉 流水线完成！bilingual.json 已就绪。")
-    print("  下一步：python3 scripts/build_index.py && python3 scripts/sync_web.py")
+    print("  下一步：python3 scripts/migrate_to_d1.py && python3 scripts/sync_web.py")
     return 0
 
 

@@ -23,5 +23,5 @@ while read -r feed idx rest <&3; do
 done 3< "$JOBS"
 
 echo ""
-echo "🎉 批量任务全部结束，运行 build_index + sync_web + build_charts 汇总："
-python3 scripts/build_index.py && python3 scripts/sync_web.py && python3 scripts/build_charts.py
+echo "🎉 批量任务全部结束，运行 migrate_to_d1 + sync_web + build_charts 汇总："
+python3 scripts/migrate_to_d1.py && python3 scripts/sync_web.py && python3 scripts/build_charts.py

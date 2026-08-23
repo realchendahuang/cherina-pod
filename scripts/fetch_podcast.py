@@ -343,7 +343,6 @@ def download_episode(src, index, keep_original=False):
         "podcast": podcast["meta"],
         "episode": ep,
         "audio_path": os.path.relpath(audio_path, ep_dir),
-        "episode_dir": ep_dir,
     }
     with open(os.path.join(ep_dir, "meta.json"), "w", encoding="utf-8") as f:
         json.dump(meta, f, ensure_ascii=False, indent=2)

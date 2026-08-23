@@ -26,8 +26,8 @@
 <meta name="twitter:image" content="https://pod.cherina.app/brand/web-logo-small.svg">
 <!-- 结构化数据：站点（路由级 JSON-LD 由 JS 按页面注入/替换） -->
 <script type="application/ld+json" id="ldJson">{"@context":"https://schema.org","@type":"WebSite","name":"Cherina Pod","url":"https://pod.cherina.app/","description":"双语播客精听：中英对照逐句学习，跟读循环、倍速播放。","inLanguage":"zh-CN"}</script>
-<!-- Cloudflare Web Analytics：把 TOKEN 换成控制台生成的 site token（Analytics & Logs → Web Analytics → 添加站点） -->
-<script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"token": "YOUR_CF_WEB_ANALYTICS_TOKEN"}'></script>
+<!-- Cloudflare Web Analytics：Analytics & Logs → Web Analytics → 添加站点，拿到 token 后取消下面这行注释并填入 -->
+<!-- <script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"token": "YOUR_CF_WEB_ANALYTICS_TOKEN"}'></script> -->
 <style>
   /* ============================================================
      Cherina 设计系统 v3.0.0「朱砂·墨·纸」tokens
@@ -38,7 +38,7 @@
     font-style: normal;
     font-weight: 200 900;
     font-display: swap;
-    src: url("./fonts/nunito/Nunito-wght.ttf") format("truetype");
+    src: url("./fonts/nunito/Nunito-latin.woff2") format("woff2");
   }
   :root {
     --font-brand-ui: "Nunito", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui, sans-serif;
@@ -550,6 +550,10 @@
     margin-top: 3px;
     font-variant-numeric: tabular-nums;
   }
+  /* 句子命中行：中文句较长，允许多行而非截断；时间戳更醒目 */
+  .sent-hits .ep-row .num { color: var(--app-action-accent); width: auto; min-width: 2.5rem; }
+  .sent-hits .ep-row .t-zh { white-space: normal; }
+  .sent-hits .ep-row .t-en { white-space: normal; }
   /* 收听进度：细朱砂条 + 已听至 */
   .ep-row .heard {
     display: flex; align-items: center; gap: var(--app-space-2);
@@ -1315,7 +1319,7 @@ let chartsFailed = false;
 
 async function loadIndex() {
   if (indexCache) return indexCache;
-  const resp = await fetch('./index.json', { cache: 'no-store' });
+  const resp = await fetch('/api/episodes', { cache: 'no-store' });
   if (!resp.ok) throw new Error('HTTP ' + resp.status);
   indexCache = await resp.json();
   return indexCache;
@@ -1546,7 +1550,9 @@ async function renderDiscover() {
 
   bindNav(app);
   $('#searchInput').addEventListener('input', e => {
-    drawDiscoverSearch(e.target.value.trim().toLowerCase(), channels, items);
+    const raw = e.target.value.trim();
+    drawDiscoverSearch(raw.toLowerCase(), channels, items);
+    scheduleSentenceSearch(raw);
   });
 
   // 榜单异步补充，不阻塞首屏
@@ -1622,6 +1628,80 @@ function miniCardHtml(it) {
   );
 }
 
+/* 句子搜索结果行 */
+function sentenceRowHtml(r) {
+  const main = r.episode_title_zh || r.episode_title || '';
+  const sub = main && r.episode_title ? (r.episode_title_zh ? r.episode_title : '') : '';
+  return (
+    '<div class="ep-row" data-go="ep:' + encodeURIComponent(r.episode_id) + '" data-seek="' + (r.start || 0) + '" tabindex="0" role="link">' +
+      '<span class="num">' + escapeHtml(fmtTime(r.start)) + '</span>' +
+      '<div class="info">' +
+        '<div class="t-zh">' + escapeHtml(r.zh || '') + '</div>' +
+        '<div class="t-en">' + escapeHtml(r.en || '') + '</div>' +
+        '<div class="meta">' + escapeHtml(r.podcast || '') + (main ? ' · ' + escapeHtml(main) : '') + '</div>' +
+      '</div>' +
+      '<span class="chev">' + CHEV_SVG + '</span>' +
+    '</div>'
+  );
+}
+
+/* 句子命中区块：追加进搜索结果 */
+let sentenceQuery = '';
+function renderSentenceHits(query, rows) {
+  sentenceQuery = query;
+  const results = $('#searchResults');
+  if (!results) return;
+  const prev = results.querySelector('.sent-hits');
+  if (prev) prev.remove();
+  // 标题无命中时的「正在检索」占位：句子结果回来后清掉
+  const empty = results.querySelector('.empty');
+  if (!rows || !rows.length) {
+    if (empty && !results.querySelector('.section')) {
+      empty.innerHTML = '<img class="mascot" src="' + MASCOT + '" alt="">没有匹配「' + escapeHtml(query) + '」的内容';
+    }
+    return;
+  }
+  if (empty) empty.remove();
+  const sec = document.createElement('section');
+  sec.className = 'section sent-hits';
+  sec.innerHTML =
+    '<div class="section-head"><h2>句子命中</h2><span class="count">' + rows.length + '</span></div>' +
+    '<div class="ep-rows">' + rows.map(sentenceRowHtml).join('') + '</div>';
+  results.prepend(sec);
+  bindNav(sec);
+  // 覆盖 bindNav 默认跳转：记录 seek 目标
+  sec.querySelectorAll('[data-seek]').forEach(el => {
+    el.addEventListener('click', () => {
+      const id = el.dataset.go.split(':')[1];
+      pendingSeek = { id: decodeURIComponent(id), t: +el.dataset.seek };
+      location.hash = el.dataset.go;
+    });
+  });
+}
+
+/* 句子搜索：英文走 FTS5、中文走 LIKE，D1 不可用时静默降级 */
+let sentenceSearchTimer = 0;
+let sentenceSearchSeq = 0;
+function scheduleSentenceSearch(raw) {
+  clearTimeout(sentenceSearchTimer);
+  if (!raw) { renderSentenceHits('', []); return; }
+  if (raw.length < 2) { renderSentenceHits('', []); return; }
+  sentenceSearchTimer = setTimeout(() => runSentenceSearch(raw), 250);
+}
+async function runSentenceSearch(raw) {
+  const mySeq = ++sentenceSearchSeq;
+  try {
+    const resp = await fetch('/api/search?q=' + encodeURIComponent(raw));
+    if (!resp.ok) return;
+    const data = await resp.json();
+    if (mySeq !== sentenceSearchSeq) return; // 过期响应丢弃
+    if (currentView.name !== 'discover') return;
+    renderSentenceHits(raw, data.items || []);
+  } catch (e) {
+    // D1 未就绪/网络失败：静默降级为纯标题搜索
+  }
+}
+
 /* 发现页搜索：频道 / 单集 / 榜单 三组 */
 function drawDiscoverSearch(query, channels, items) {
   const main = $('#discoverMain');
@@ -1655,7 +1735,8 @@ function drawDiscoverSearch(query, channels, items) {
     results.innerHTML =
       '<div class="empty">' +
         '<img class="mascot" src="' + MASCOT + '" alt="">' +
-        '没有匹配「' + escapeHtml(query) + '」的内容' +
+        '标题没有匹配「' + escapeHtml(query) + '」<br>' +
+        '<span style="opacity:.6">正在检索双语逐句…</span>' +
       '</div>';
     return;
   }
@@ -1844,6 +1925,9 @@ const ep = {
   rafId: 0,
 };
 
+// 跨期句子搜索命中后跳详情页自动定位到该句（id + 起始秒）
+let pendingSeek = null;
+
 function epStoreKey(id) { return 'cherina:ep:' + id; }
 
 function loadEpPrefs(id) {
@@ -1894,7 +1978,7 @@ async function renderEpisode(id) {
   app.innerHTML = '<div class="empty">正在加载单期内容…</div>';
   let data;
   try {
-    const resp = await fetch('./episodes/' + encodeURIComponent(id) + '/bilingual.json', { cache: 'no-store' });
+    const resp = await fetch('/api/episodes/' + encodeURIComponent(id), { cache: 'no-store' });
     if (!resp.ok) throw new Error('HTTP ' + resp.status);
     data = await resp.json();
   } catch (e) {
@@ -2096,6 +2180,17 @@ async function renderEpisode(id) {
   setupPlayer(id, audioSrc, prefs, audioFallback);
   setupToolbar();
   setupList();
+
+  // 从句子搜索跳入：定位到命中的句子并高亮
+  if (pendingSeek && pendingSeek.id === id) {
+    const t = pendingSeek.t;
+    pendingSeek = null;
+    const idx = findPairIndex(t);
+    if (idx >= 0) {
+      if (ep.audio && ep.audio.src) ep.audio.currentTime = t + 0.01;
+      setActive(idx, true);
+    }
+  }
 }
 
 /* ---------- 播放器 ---------- */

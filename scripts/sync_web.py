@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""同步 episodes 数据 → web/public + 压缩音频 → 自建 RustFS（线上网页数据源）。
+"""压缩音频 → 自建 RustFS（线上播放音源）。
 
-- episodes/index.json → web/public/index.json
-- episodes/<id>/bilingual.json → web/public/episodes/<id>/bilingual.json
+节目数据（发现页/详情页/搜索）已全部走 D1，不再同步到 web/public。
+本地 episodes/<id>/bilingual.json 只作为 migrate_to_d1.py 的灌库原料。
+
 - episodes/<id>/audio/episode.mp4 → S3 PUT 到 RustFS bucket（幂等，已存在跳过）
 
 音频不走 Cloudflare 静态资产（25MiB 上限），走自建源 pod-audio.cherina.app，
@@ -21,7 +22,6 @@ import hashlib
 import hmac
 import json
 import os
-import shutil
 import sys
 import urllib.error
 import urllib.parse
@@ -32,7 +32,6 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
 EPISODES = ROOT / "episodes"
-PUBLIC = ROOT / "web" / "public"
 
 sys.path.insert(0, str(HERE))
 from common import UA, load_env  # noqa: E402
@@ -151,31 +150,10 @@ def s3_client_from_env():
 def main():
     load_env()
 
-    # 1. index.json
-    idx = EPISODES / "index.json"
-    if not idx.exists():
-        print("先运行 build_index.py 生成 index.json", file=sys.stderr)
-        return 2
-    shutil.copy(idx, PUBLIC / "index.json")
-    print(f"✅ {idx.name} → web/public/index.json")
+    # 节目数据不再同步到 web/public：发现页/详情页/搜索全部走 D1 API，
+    # 本地 bilingual.json 只作为 migrate_to_d1.py 的灌库原料（见 docs/数据架构演进.md）。
 
-    # 2. 每期 bilingual.json
-    dest_root = PUBLIC / "episodes"
-    dest_root.mkdir(exist_ok=True)
-    n = 0
-    for ep_dir in EPISODES.iterdir():
-        if not ep_dir.is_dir():
-            continue
-        bj = ep_dir / "bilingual.json"
-        if not bj.exists():
-            continue
-        dest = dest_root / ep_dir.name / "bilingual.json"
-        dest.parent.mkdir(exist_ok=True)
-        shutil.copy(bj, dest)
-        n += 1
-    print(f"✅ {n} 期 bilingual.json 已同步到 web/public/episodes/")
-
-    # 3. 压缩音频（audio/episode.mp4，AAC 64k mono）→ RustFS，对象键 <episode_id>.mp4
+    # 压缩音频（audio/episode.mp4，AAC 64k mono）→ RustFS，对象键 <episode_id>.mp4
     s3 = s3_client_from_env()
     if s3:
         up, skip = 0, 0

@@ -30,3 +30,9 @@ episodes/*/translation.json
 episodes/*/*.mp3
 episodes/*/*.m4a
 episodes/*/*.wav
+
+# D1 迁移 SQL 由 migrate_to_d1.py 生成（每次 deploy 前重建，不提交）
+web/migrations/
+
+# ZCode 会话产物
+.zcode/

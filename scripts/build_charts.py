@@ -34,18 +34,17 @@ def main():
     ap.add_argument("--limit", type=int, default=50)
     args = ap.parse_args()
 
-    # 本地节目库：播客名归一化 → 展示信息
-    idx_path = ROOT / "episodes" / "index.json"
+    # 本地节目库：遍历各期 bilingual.json，按播客名归一化 → 展示信息
     library = {}
-    if idx_path.exists():
-        idx = json.loads(idx_path.read_text(encoding="utf-8"))
-        for it in idx.get("items", []):
-            key = norm(it.get("podcast_title", ""))
-            if key:
-                library[key] = {
-                    "podcast_title": it["podcast_title"],
-                    "podcast_title_zh": it.get("podcast_title_zh", ""),
-                }
+    for bj in sorted((ROOT / "episodes").glob("*/bilingual.json")):
+        pc = json.loads(bj.read_text(encoding="utf-8")).get("podcast", {})
+        title = pc.get("title", "")
+        key = norm(title)
+        if key:
+            library[key] = {
+                "podcast_title": title,
+                "podcast_title_zh": pc.get("title_zh", ""),
+            }
 
     url = f"https://rss.applemarketingtools.com/api/v2/{args.country}/podcasts/top/{args.limit}/podcasts.json"
     print(f"抓取榜单：{url}")

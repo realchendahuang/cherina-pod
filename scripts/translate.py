@@ -2,7 +2,7 @@
 """DeepSeek V4 Flash 逐句翻译（信达雅 prompt，双供应商负载均衡）。
 
 输入：episode_dir/transcript.json（阿里云 Paraformer 输出的句级英文）
-输出：episode_dir/translation.json（逐句 {en, zh, start, end}）
+输出：episode_dir/translation.json（逐句 {en, zh}）
 
 供应商（OpenAI 兼容 /chat/completions）：
   - ollama-cloud  https://ollama.com/v1          key: OLLAMA_API_KEY
@@ -120,15 +120,13 @@ def chat_completion_retry(provider, messages, max_tokens=3000, timeout=300, retr
 
 
 def _build_batch_messages(batch):
-    """构造一个批次的翻译 messages。"""
+    """构造一个批次的翻译 messages。
+
+    只传文本、只要求输出 {en, zh}：时间戳在 align.py 里以 transcript 为准，
+    让 LLM 生成/回填 start/end 是白烧 token，还引入抄错数字的风险。
+    """
     texts = [s["text"] for s in batch]
-    payload = json.dumps(
-        [
-            {"text": t, "start": s["start"], "end": s["end"]}
-            for t, s in zip(texts, batch)
-        ],
-        ensure_ascii=False,
-    )
+    payload = json.dumps(texts, ensure_ascii=False)
     system = (
         "你是一位专业的中英双语译者，译文遵循信达雅原则。\n"
         "核心要求：\n"
@@ -143,8 +141,7 @@ def _build_batch_messages(batch):
     )
     user = (
         f"下面是一个英文播客转录片段，含 {len(texts)} 句。\n"
-        f'请逐句翻译成中文，输出 JSON 数组，每项为 {{"en": 原文, "zh": 中文翻译, "start": 起始秒, "end": 结束秒}}。\n'
-        f"start/end 必须原样保留输入值。\n\n"
+        f'请逐句翻译成中文，输出 JSON 数组，每项为 {{"en": 原文, "zh": 中文翻译}}。\n\n'
         f"输入 JSON：\n{payload}"
     )
     return [
@@ -156,7 +153,7 @@ def _build_batch_messages(batch):
 def translate_batch(batch, order):
     """翻译一个批次，按供应商顺序失败切换；整批失败时拆半重试。
 
-    返回 ([{en,zh,start,end}], 供应商名)。单句仍失败则抛 RuntimeError。
+    返回 ([{en,zh}], 供应商名)。单句仍失败则抛 RuntimeError。
     """
     messages, expected = _build_batch_messages(batch)
     last_err = None
@@ -190,7 +187,7 @@ def translate_sentences(
     resume=None,
     out_path=None,
 ):
-    """多线程逐批翻译。返回 [{en, zh, start, end}]，resume 为已完成结果列表。"""
+    """多线程逐批翻译。返回 [{en, zh}]，resume 为已完成结果列表。"""
     from concurrent.futures import ThreadPoolExecutor, as_completed
 
     results = list(resume) if resume else []
@@ -276,8 +273,6 @@ def parse_translation(raw, expected):
             {
                 "en": str(item.get("en", "")).strip(),
                 "zh": zh,
-                "start": float(item.get("start", 0)),
-                "end": float(item.get("end", 0)),
             }
         )
     return out

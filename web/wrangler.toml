@@ -16,3 +16,9 @@ not_found_handling = "404-page"
 
 [observability]
 enabled = true
+
+# Cloudflare D1：跨期全文搜索（pairs 逐句 + FTS5）
+[[d1_databases]]
+binding = "DB"
+database_name = "cherina-pod-db"
+database_id = "ae388ead-47e4-4d23-ba4d-4a84e4afd407"

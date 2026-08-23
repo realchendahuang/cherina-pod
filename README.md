@@ -32,8 +32,8 @@ bash scripts/batch_add.sh
 python3 scripts/translate_titles.py
 # 然后对相关期重跑 align.py 使 title_zh 进入 bilingual.json
 
-# 5. 汇总节目库 + 同步到网页数据
-python3 scripts/build_index.py
+# 5. 迁移到 D1（节目数据 + sitemap）+ 同步音频 + 榜单
+python3 scripts/migrate_to_d1.py
 python3 scripts/sync_web.py
 python3 scripts/build_charts.py     # Apple Podcasts 热门榜（发现页数据源）
 

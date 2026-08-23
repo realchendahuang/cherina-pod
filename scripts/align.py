@@ -59,9 +59,16 @@ def main():
     if missing:
         print(f"⚠️ {missing} 句缺译文（请续跑 translate.py 后重新对齐）", file=sys.stderr)
 
+    pc = meta["podcast"]
     bilingual = {
         "id": ep_dir.name,  # 目录名作为唯一 id（网页 ?id= 定位）
-        "podcast": meta["podcast"],
+        # podcast 只保留前端/索引用到的字段，不复制 description/feed_url/link 等冗余
+        "podcast": {
+            "title": pc.get("title", ""),
+            "author": pc.get("author", ""),
+            "image": pc.get("image", ""),
+            "title_zh": pc.get("title_zh", ""),
+        },
         "episode": {
             "title": meta["episode"]["title"],
             "title_zh": meta["episode"].get("title_zh", ""),
