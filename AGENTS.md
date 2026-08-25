@@ -26,10 +26,11 @@ bash scripts/batch_add.sh                            # 批量新增（jobs 列�
 python3 scripts/translate.py <episode_dir> --batch-size 12 --workers 3  # 并发翻译，可断点续跑
 python3 scripts/translate_titles.py              # 播客名/单集标题中译（幂等，run_pipeline 已内置）
 python3 scripts/migrate_to_d1.py                 # 生成 D1 迁移 SQL + sitemap（读 bilingual.json）
-python3 scripts/build_charts.py                  # Apple Podcasts 热门榜 → web/public/charts.json
 python3 scripts/sync_web.py                      # 音频传 RustFS（节目数据走 D1，不再同步 web/public）
-cd web && npx wrangler dev                           # 本地预览网页
-cd web && npx wrangler deploy                        # 部署到 Cloudflare
+cd web && npm run build                          # 构建前端（app.ts→public/app.js，sw.ts→public/sw.js）
+cd web && npm run typecheck                      # TS 类型检查（app / worker / sw 三份 tsconfig）
+cd web && npx wrangler dev                       # 本地预览网页
+cd web && npx wrangler deploy                    # 部署到 Cloudflare（deploy_web.sh 已内置 npm run build）
 ```
 
 ## 音频架构（详见 docs/音频存储方案.md）

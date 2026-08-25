@@ -2,6 +2,12 @@
 // - 节目数据（发现页 /api/episodes、详情页 /api/episodes/:id、搜索 /api/search）全部走 D1
 // - 静态资产：index.html / 字体 / 图片 / charts.json / sitemap.xml 由 ASSETS 分发
 // - 音频走 RustFS（前端拼 https://pod-audio.cherina.app/<id>.mp4，不在本 Worker 范围）
+import type { D1Database, Fetcher } from '@cloudflare/workers-types';
+
+interface Env {
+  DB: D1Database;
+  ASSETS: Fetcher;
+}
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -9,18 +15,31 @@ const CORS = {
   'Access-Control-Allow-Headers': 'Content-Type',
 };
 
-function json(data, status = 200) {
+function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
     status,
     headers: { 'Content-Type': 'application/json; charset=utf-8', ...CORS },
   });
 }
 
-function isEnglishLike(q) {
+function isEnglishLike(q: string): boolean {
   return /^[\x20-\x7E]+$/.test(q) && /\s/.test(q.trim());
 }
 
-async function handleSearch(env, url) {
+interface SearchRow {
+  episode_id: string;
+  idx: number;
+  start: number;
+  end: number;
+  en: string;
+  zh: string;
+  episode_title: string;
+  episode_title_zh: string;
+  podcast: string;
+  image: string;
+}
+
+async function handleSearch(env: Env, url: URL): Promise<Response> {
   const q = (url.searchParams.get('q') || '').trim();
   if (!q) return json({ count: 0, items: [], query: '' });
   if (q.length > 200) return json({ error: '查询过长' }, 400);
@@ -37,7 +56,7 @@ async function handleSearch(env, url) {
       WHERE pairs_fts MATCH ?
       ORDER BY rank
       LIMIT 50
-    `).bind(q).all();
+    `).bind(q).all<SearchRow>();
     return json({ count: results.length, items: results, query: q });
   } catch (e) {
     // FTS5 语法错误（撇号、非法操作符等）降级为 LIKE
@@ -45,7 +64,7 @@ async function handleSearch(env, url) {
   }
 }
 
-async function fallbackLike(env, q) {
+async function fallbackLike(env: Env, q: string): Promise<Response> {
   const like = `%${q}%`;
   const { results } = await env.DB.prepare(`
     SELECT p.episode_id, p.idx, p.start, p.end, p.en, p.zh,
@@ -54,18 +73,34 @@ async function fallbackLike(env, q) {
     JOIN episodes e ON e.id = p.episode_id
     WHERE p.zh LIKE ?1 OR p.en LIKE ?1
     LIMIT 50
-  `).bind(like).all();
+  `).bind(like).all<SearchRow>();
   return json({ count: results.length, items: results, query: q });
 }
 
+interface EpisodeRow {
+  id: string;
+  podcast: string;
+  podcast_title_zh: string;
+  author: string;
+  category: string;
+  level: string;
+  episode_title: string;
+  episode_title_zh: string;
+  description: string;
+  image: string;
+  pub_date: string;
+  duration: string;
+  pairs_count: number;
+}
+
 // 发现页 / 频道页：返回 index.json 兼容结构
-async function handleEpisodes(env) {
+async function handleEpisodes(env: Env): Promise<Response> {
   const { results } = await env.DB.prepare(`
     SELECT id, podcast, podcast_title_zh, author, category, level,
            episode_title, episode_title_zh, description, image,
            pub_date, duration, pairs_count
     FROM episodes ORDER BY pub_date DESC
-  `).all();
+  `).all<EpisodeRow>();
   const items = results.map(r => ({
     id: r.id,
     podcast_title: r.podcast,
@@ -84,14 +119,36 @@ async function handleEpisodes(env) {
   return json({ count: items.length, items });
 }
 
+interface EpisodeDetailRow {
+  id: string;
+  podcast: string;
+  author: string;
+  image: string;
+  podcast_title_zh: string;
+  podcast_image: string;
+  episode_title: string;
+  episode_title_zh: string;
+  description: string;
+  pub_date: string;
+  duration: string;
+  audio_url: string;
+}
+
+interface PairRow {
+  start: number;
+  end: number;
+  en: string;
+  zh: string;
+}
+
 // 详情页：返回 bilingual.json 兼容结构
-async function handleEpisodeDetail(env, id) {
-  const row = await env.DB.prepare('SELECT * FROM episodes WHERE id = ?').bind(id).first();
+async function handleEpisodeDetail(env: Env, id: string): Promise<Response> {
+  const row = await env.DB.prepare('SELECT * FROM episodes WHERE id = ?').bind(id).first<EpisodeDetailRow>();
   if (!row) return json({ error: 'not found' }, 404);
 
   const { results: pairs } = await env.DB.prepare(
     'SELECT start, end, en, zh FROM pairs WHERE episode_id = ? ORDER BY idx'
-  ).bind(id).all();
+  ).bind(id).all<PairRow>();
 
   const duration = pairs.length ? Math.max(...pairs.map(p => p.end)) : 0;
 
@@ -118,7 +175,7 @@ async function handleEpisodeDetail(env, id) {
 }
 
 export default {
-  async fetch(request, env, ctx) {
+  async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
 
     if (url.pathname.startsWith('/api/')) {
