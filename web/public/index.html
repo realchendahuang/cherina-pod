@@ -17,6 +17,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Cherina Pod">
 <!-- Open Graph -->
 <meta property="og:site_name" content="Cherina Pod">
 <meta property="og:type" content="website">
@@ -125,7 +126,7 @@
 
   /* 全局微交互：按压回弹、焦点环 */
   button:active { transform: scale(var(--app-press-scale)); }
-  button, a, input, .card, .pair, .chan-card, .chart-row, .ep-row, .mini-card { -webkit-tap-highlight-color: transparent; }
+  button, a, input, .card, .pair, .chan-card, .ep-row, .mini-card { -webkit-tap-highlight-color: transparent; }
   :focus-visible {
     outline: none;
     box-shadow: 0 0 0 3px color-mix(in oklab, var(--app-focus-ring-color) 30%, transparent);
@@ -311,71 +312,6 @@
     -webkit-box-orient: vertical;
     overflow: hidden;
   }
-
-  /* ================= 发现页：热门播客榜 ================= */
-  .chart-list {
-    background: var(--app-card);
-    border: 1px solid var(--app-border-muted);
-    border-radius: var(--app-radius-xl);
-    box-shadow: var(--app-shadow-xs);
-    overflow: hidden;
-  }
-  .chart-row {
-    display: flex; align-items: center; gap: var(--app-space-4);
-    padding: var(--app-space-3) var(--app-space-4);
-    cursor: pointer;
-    border-bottom: 1px solid var(--app-border-muted);
-    transition: background var(--app-duration-base) var(--app-ease-standard);
-  }
-  .chart-row:last-child { border-bottom: none; }
-  .chart-row:hover { background: var(--app-selection-surface); }
-  /* 序号：前三朱砂，其后墨色阶梯 */
-  .rank {
-    width: 2.5rem;
-    flex-shrink: 0;
-    text-align: right;
-    font-family: var(--font-brand-display);
-    font-size: var(--app-text-h2);
-    line-height: 1;
-    font-weight: 700;
-    font-variant-numeric: tabular-nums;
-    color: var(--app-text-disabled);
-  }
-  .rank.r-mid { color: var(--app-text-tertiary); }
-  .rank.r-top { color: var(--app-identity-accent); }
-  .chart-row .art-wrap {
-    width: 56px; height: 56px;
-    flex-shrink: 0;
-    border-radius: var(--app-radius-md);
-    background: var(--app-surface-warm);
-    overflow: hidden;
-    display: flex; align-items: center; justify-content: center;
-    box-shadow: var(--app-shadow-xs);
-  }
-  .chart-row .art-wrap .cover-ph { font-size: var(--app-text-h2); }
-  .chart-row .art {
-    width: 100%; height: 100%;
-    object-fit: cover;
-  }
-  .chart-row .info { min-width: 0; flex: 1; }
-  .chart-row .name {
-    font-size: var(--app-text-body-sm);
-    font-weight: 800;
-    line-height: 1.4;
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  }
-  .chart-row .artist {
-    font-size: var(--app-text-caption);
-    color: var(--app-text-muted);
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  }
-  .chart-row .tail {
-    display: inline-flex; align-items: center; gap: var(--app-space-2);
-    flex-shrink: 0;
-    color: var(--app-text-disabled);
-  }
-  .chart-row .tail svg { width: var(--app-icon-sm); height: var(--app-icon-sm); }
-  .chart-row:hover .tail { color: var(--app-action-accent); }
 
   /* ================= 发现页：最新单集横向卡片条 ================= */
   .rail-scroll {
@@ -1152,9 +1088,6 @@
     .brand-logo { height: 34px; }
     .search-input { height: var(--app-control-lg); font-size: var(--app-text-body); }
     .chan-grid { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: var(--app-space-4) var(--app-space-3); }
-    .rank { width: 1.75rem; font-size: var(--app-text-h3); }
-    .chart-row { gap: var(--app-space-3); padding: var(--app-space-3); }
-    .chart-row .art-wrap { width: 48px; height: 48px; }
     .pod-hero { gap: var(--app-space-4); }
     .pod-cover-wrap { width: 108px; height: 108px; border-radius: var(--app-radius-lg); }
     .pod-info h1 { font-size: var(--app-text-h2); line-height: 1.3; }
@@ -1183,6 +1116,9 @@
       </span>
     </a>
     <div class="spacer"></div>
+    <button class="icon-btn" id="installBtn" title="安装到主屏幕" aria-label="安装到主屏幕" hidden>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M4 19h16"/></svg>
+    </button>
     <button class="icon-btn" id="themeBtn" title="切换亮色 / 暗色主题" aria-label="切换主题">
       <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4.5"/><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.2 5.2l1.5 1.5M17.3 17.3l1.5 1.5M5.2 18.8l1.5-1.5M17.3 6.7l1.5-1.5"/></svg>
       <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 14.5A8.5 8.5 0 0 1 9.5 3.5a8.5 8.5 0 1 0 11 11z"/></svg>
@@ -1283,7 +1219,6 @@ function fallbackCopy(t) {
 }
 
 const CHEV_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>';
-const EXT_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7"/><path d="M8 7h9v9"/></svg>';
 
 /* ================= 主题（默认亮色，localStorage 记忆） ================= */
 const THEME_KEY = 'cherina:theme';
@@ -1353,8 +1288,6 @@ function isoDuration(d) {
 
 /* ================= 数据加载 ================= */
 let indexCache = null;
-let chartsCache = null;
-let chartsFailed = false;
 
 async function loadIndex() {
   if (indexCache) return indexCache;
@@ -1362,18 +1295,6 @@ async function loadIndex() {
   if (!resp.ok) throw new Error('HTTP ' + resp.status);
   indexCache = await resp.json();
   return indexCache;
-}
-
-async function loadCharts() {
-  if (chartsCache || chartsFailed) return chartsCache;
-  try {
-    const resp = await fetch('./charts.json', { cache: 'no-store' });
-    if (!resp.ok) throw new Error('HTTP ' + resp.status);
-    chartsCache = await resp.json();
-  } catch (e) {
-    chartsFailed = true; // 榜单是增强内容，失败不阻塞主流程
-  }
-  return chartsCache;
 }
 
 /* 播客分组（以英文名做稳定 key；播客名全站只展示英文原名，title_zh 仅留作搜索兼容） */
@@ -1400,17 +1321,24 @@ function groupChannels(items) {
   return Array.from(map.values());
 }
 
-/* 榜单里匹配到的 Apple 链接（podcast_key 精确匹配，其次播客名） */
-function findAppleUrl(charts, podcastTitle) {
-  if (!charts || !charts.items) return '';
-  const hit = charts.items.find(i =>
-    i.in_library && (i.podcast_key === podcastTitle || i.name === podcastTitle));
-  return hit ? (hit.apple_url || '') : '';
-}
-
 /* ================= 路由（hash + ?id= 兼容） ================= */
 // currentView: { name: 'discover' | 'podcast' | 'episode', param }
 const currentView = { name: 'discover', param: null };
+
+// 应用内导航栈：记录用户实际进入上一页的 hash，返回按钮据此"回到来源页"
+// 而非硬编码的逻辑父级。仅在站内点击跳转时压栈；深链直达时不压栈。
+const navStack = [];
+
+// 返回目标解析：优先回到来源页，栈空（深链直达）才退回逻辑父级。
+function backTarget() {
+  if (navStack.length) return navStack.pop();
+  if (currentView.name === 'episode') {
+    const pc = (ep.data && ep.data.podcast) || {};
+    const key = pc.title || pc.title_zh || '';
+    return key ? '#/podcast/' + encodeURIComponent(key) : '#/';
+  }
+  return '#/'; // podcast / discover
+}
 
 function route() {
   // 兼容旧的 ?id=xxx / ?podcast=xxx 形式（也是 sitemap 收录的 URL 形态）
@@ -1448,6 +1376,7 @@ function bindNav(root) {
       if (type === 'ext') {
         window.open(payload, '_blank', 'noopener');
       } else {
+        navStack.push(location.hash || '#/');
         location.hash = '#/' + type + '/' + payload;
       }
     };
@@ -1582,12 +1511,6 @@ async function renderDiscover() {
         '<div class="section-head"><h2>全部频道</h2></div>' +
         '<div class="chan-grid">' + channels.map(chanCardHtml).join('') + '</div>' +
       '</section>' +
-
-      '<section class="section" id="chartSection" hidden>' +
-        '<div class="section-head"><h2>热门播客榜</h2><span class="sub" id="chartSub"></span></div>' +
-        '<div class="chart-list" id="chartList"></div>' +
-        '<div class="section-foot" id="chartFoot"></div>' +
-      '</section>' +
     '</div>' +
 
     '<div id="searchResults" hidden></div>';
@@ -1597,19 +1520,6 @@ async function renderDiscover() {
     const raw = e.target.value.trim();
     drawDiscoverSearch(raw.toLowerCase(), channels, items);
     scheduleSentenceSearch(raw);
-  });
-
-  // 榜单异步补充，不阻塞首屏
-  loadCharts().then(c => {
-    if (currentView.name !== 'discover') return;
-    const sec = $('#chartSection');
-    if (!sec) return;
-    if (!c || !c.items || !c.items.length) return;
-    sec.hidden = false;
-    $('#chartSub').textContent = (c.title || 'Top Shows') + (c.country ? ' · ' + String(c.country).toUpperCase() : '');
-    $('#chartList').innerHTML = c.items.map(chartRowHtml).join('');
-    $('#chartFoot').textContent = 'Apple Podcasts 榜单';
-    bindNav(sec);
   });
 }
 
@@ -1623,29 +1533,6 @@ function chanCardHtml(g) {
       '<div class="body">' +
         '<div class="name-zh">' + escapeHtml(g.name) + '</div>' +
       '</div>' +
-    '</div>'
-  );
-}
-
-/* 榜单行 */
-function chartRowHtml(it) {
-  const inLib = !!(it.in_library && it.podcast_key);
-  const rankCls = it.rank <= 3 ? 'r-top' : (it.rank <= 10 ? 'r-mid' : '');
-  const go = inLib
-    ? 'podcast:' + encodeURIComponent(it.podcast_key)
-    : 'ext:' + (it.apple_url || '');
-  return (
-    '<div class="chart-row" data-go="' + escapeHtml(go) + '" tabindex="0" role="link"' +
-      (!inLib ? ' title="在 Apple Podcasts 打开（新标签页）"' : '') + '>' +
-      '<span class="rank ' + rankCls + '">' + it.rank + '</span>' +
-      '<div class="art-wrap">' + coverHtml(it.artwork, 'art', it.name) + '</div>' +
-      '<div class="info">' +
-        '<div class="name">' + escapeHtml(it.name || '') + '</div>' +
-        '<div class="artist">' + escapeHtml(it.artist || '') + '</div>' +
-      '</div>' +
-      '<span class="tail">' +
-        (inLib ? CHEV_SVG : EXT_SVG) +
-      '</span>' +
     '</div>'
   );
 }
@@ -1740,6 +1627,7 @@ function renderSentenceHits(query, rows) {
     el.addEventListener('click', () => {
       const id = el.dataset.go.split(':')[1];
       pendingSeek = { id: decodeURIComponent(id), t: +el.dataset.seek };
+      navStack.push(location.hash || '#/');
       location.hash = el.dataset.go;
     });
   });
@@ -1768,7 +1656,7 @@ async function runSentenceSearch(raw) {
   }
 }
 
-/* 发现页搜索：频道 / 单集 / 榜单 三组 */
+/* 发现页搜索：频道 / 单集 两组 */
 function drawDiscoverSearch(query, channels, items) {
   const main = $('#discoverMain');
   const results = $('#searchResults');
@@ -1792,12 +1680,8 @@ function drawDiscoverSearch(query, channels, items) {
     (it.podcast_title || '').toLowerCase().includes(query) ||
     (it.podcast_title_zh || '').toLowerCase().includes(query) ||
     (it.podcast_author || '').toLowerCase().includes(query));
-  const chartHits = (chartsCache && chartsCache.items || []).filter(it =>
-    (it.name || '').toLowerCase().includes(query) ||
-    (it.artist || '').toLowerCase().includes(query) ||
-    (it.title_zh || '').toLowerCase().includes(query));
 
-  if (!chanHits.length && !epHits.length && !chartHits.length) {
+  if (!chanHits.length && !epHits.length) {
     results.innerHTML =
       '<div class="empty">' +
         '<img class="mascot" src="' + MASCOT + '" alt="">' +
@@ -1820,13 +1704,6 @@ function drawDiscoverSearch(query, channels, items) {
       '<section class="section">' +
         '<div class="section-head"><h2>单集</h2><span class="count">' + epHits.length + '</span></div>' +
         '<div class="ep-rows">' + epHits.map((it, i) => epRowHtml(it, i + 1, true)).join('') + '</div>' +
-      '</section>';
-  }
-  if (chartHits.length) {
-    html +=
-      '<section class="section">' +
-        '<div class="section-head"><h2>热门榜单</h2><span class="count">' + chartHits.length + '</span></div>' +
-        '<div class="chart-list">' + chartHits.map(chartRowHtml).join('') + '</div>' +
       '</section>';
   }
   results.innerHTML = html;
@@ -1896,9 +1773,6 @@ async function renderPodcast(key) {
             '<button class="desc-toggle" id="podDescToggle">展开</button>'
           : '') +
         '<div class="pod-stats">' + eps.length + ' 集 · ' + g.pairs + ' 句</div>' +
-        '<div class="pod-actions">' +
-          '<a class="tool-btn" id="appleBtn" hidden target="_blank" rel="noopener">在 Apple Podcasts 打开 ' + EXT_SVG + '</a>' +
-        '</div>' +
       '</div>' +
     '</div>' +
 
@@ -1916,16 +1790,6 @@ async function renderPodcast(key) {
       toggle.textContent = clamped ? '展开' : '收起';
     });
   }
-
-  // Apple 链接：榜单里有才显示
-  loadCharts().then(c => {
-    const url = findAppleUrl(c, key);
-    const btn = $('#appleBtn');
-    if (url && btn) {
-      btn.href = url;
-      btn.hidden = false;
-    }
-  });
 }
 
 /* 单集行（频道页 / 搜索结果共用） */
@@ -2137,7 +2001,7 @@ async function renderEpisode(id) {
             '</div>'
           : '') +
         '<div class="toolbar">' +
-          '<a class="back-link" href="' + backHash + '" title="返回频道" aria-label="返回频道">' +
+          '<a class="back-link" href="' + backHash + '" title="返回" aria-label="返回" onclick="event.preventDefault(); location.hash = backTarget();">' +
             '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>' +
           '</a>' +
           '<div class="spacer"></div>' +
@@ -2606,9 +2470,7 @@ document.addEventListener('keydown', e => {
     const pop = $('#settingsPop');
     if (pop && !pop.hidden) { if (ep.closeSettings) ep.closeSettings(); return; }
     if (currentView.name === 'episode' && ep.data) {
-      const pc = ep.data.podcast || {};
-      const key = pc.title || pc.title_zh || '';
-      location.hash = key ? '#/podcast/' + encodeURIComponent(key) : '#/';
+      location.hash = backTarget();
       return;
     }
     if (currentView.name === 'podcast') { location.hash = '#/'; return; }
@@ -2666,6 +2528,27 @@ window.addEventListener('beforeunload', saveEpPrefs);
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js'));
 }
+// PWA：安装引导（仅桌面/Android 支持 beforeinstallprompt 时显示）
+let deferredPrompt = null;
+const installBtn = $('#installBtn');
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredPrompt = e;
+  installBtn.hidden = false;
+});
+installBtn.addEventListener('click', async () => {
+  if (!deferredPrompt) return;
+  deferredPrompt.prompt();
+  const { outcome } = await deferredPrompt.userChoice;
+  if (outcome === 'accepted') toast('已安装到主屏幕');
+  deferredPrompt = null;
+  installBtn.hidden = true;
+});
+window.addEventListener('appinstalled', () => {
+  deferredPrompt = null;
+  installBtn.hidden = true;
+  toast('已安装到主屏幕');
+});
 route();
 </script>
 </body>

@@ -3,6 +3,7 @@
   "short_name": "Cherina Pod",
   "description": "中英对照逐句学习，跟读循环、倍速播放，从优质英文播客中提升听力与口语。",
   "lang": "zh-CN",
+  "id": "/",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
