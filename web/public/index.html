@@ -11,6 +11,12 @@
 <meta name="theme-color" content="#fbfaf8">
 <link rel="canonical" href="https://pod.cherina.app/">
 <link rel="icon" type="image/svg+xml" href="./brand/favicon.svg">
+<!-- PWA -->
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="apple-touch-icon" href="./brand/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <!-- Open Graph -->
 <meta property="og:site_name" content="Cherina Pod">
 <meta property="og:type" content="website">
@@ -1283,6 +1289,8 @@ const EXT_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stro
 const THEME_KEY = 'cherina:theme';
 function applyTheme(t) {
   document.documentElement.dataset.theme = t;
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.content = t === 'dark' ? '#121110' : '#fbfaf8'; // 与 --app-bg 同步
 }
 function initTheme() {
   const saved = localStorage.getItem(THEME_KEY);
@@ -2654,6 +2662,10 @@ document.addEventListener('click', () => {
   if (pop && !pop.hidden && ep.closeSettings) ep.closeSettings();
 });
 window.addEventListener('beforeunload', saveEpPrefs);
+// PWA：注册 Service Worker（离线缓存 app shell 与已浏览节目）
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js'));
+}
 route();
 </script>
 </body>
