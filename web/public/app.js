@@ -2,9 +2,14 @@
 (() => {
   // src/app.ts
   var $ = (sel, root) => (root || document).querySelector(sel);
-  var app = $("#app");
-  var container = $("#container");
-  var toastEl = $("#toast");
+  function mustGet(sel) {
+    const el = $(sel);
+    if (!el) throw new Error("\u7F3A\u5C11\u5FC5\u9700\u5143\u7D20\uFF1A" + sel);
+    return el;
+  }
+  var app = mustGet("#app");
+  var container = mustGet("#container");
+  var toastEl = mustGet("#toast");
   var MASCOT = "./brand/cherina-mascot-companion.png";
   function escapeHtml(s) {
     return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
@@ -38,7 +43,7 @@
   function toast(msg) {
     toastEl.textContent = msg;
     toastEl.classList.add("show");
-    clearTimeout(toastTimer);
+    if (toastTimer != null) clearTimeout(toastTimer);
     toastTimer = setTimeout(() => toastEl.classList.remove("show"), 1400);
   }
   function copyText(t) {
@@ -56,7 +61,7 @@
     ta.select();
     try {
       document.execCommand("copy");
-    } catch (e) {
+    } catch {
     }
     ta.remove();
   }
@@ -71,7 +76,7 @@
     const saved = localStorage.getItem(THEME_KEY);
     applyTheme(saved === "dark" ? "dark" : "light");
   }
-  $("#themeBtn").addEventListener("click", () => {
+  mustGet("#themeBtn").addEventListener("click", () => {
     const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
     applyTheme(next);
     localStorage.setItem(THEME_KEY, next);
@@ -122,8 +127,9 @@
     if (indexCache) return indexCache;
     const resp = await fetch("/api/episodes", { cache: "no-store" });
     if (!resp.ok) throw new Error("HTTP " + resp.status);
-    indexCache = await resp.json();
-    return indexCache;
+    const data = await resp.json();
+    indexCache = data;
+    return data;
   }
   function groupChannels(items) {
     const map = /* @__PURE__ */ new Map();
@@ -141,6 +147,7 @@
         });
       }
       const g = map.get(key);
+      if (!g) continue;
       g.episodes.push(it);
       g.pairs += it.pairs_count || 0;
       if (!g.image && it.image) g.image = it.image;
@@ -150,7 +157,8 @@
   var currentView = { name: "discover", param: null };
   var navStack = [];
   function backTarget() {
-    if (navStack.length) return navStack.pop();
+    const prev = navStack.pop();
+    if (prev) return prev;
     if (currentView.name === "episode") {
       const pc = ep.data && ep.data.podcast || {};
       const key = pc.title || pc.title_zh || "";
@@ -185,6 +193,7 @@
     root.querySelectorAll("[data-go]").forEach((el) => {
       const open = () => {
         const v = el.dataset.go;
+        if (!v) return;
         const i = v.indexOf(":");
         const type = v.slice(0, i);
         const payload = v.slice(i + 1);
@@ -247,12 +256,6 @@
       (catBuckets[cat] || (catBuckets[cat] = [])).push(it);
     }
     const CAT_ORDER = ["\u82F1\u8BED\u5B66\u4E60", "\u5546\u4E1A\u8D22\u7ECF", "\u79D1\u6280\u8BA4\u77E5", "\u65B0\u95FB\u7EAA\u5B9E"];
-    const CAT_SUB = {
-      "\u82F1\u8BED\u5B66\u4E60": "English Learning",
-      "\u5546\u4E1A\u8D22\u7ECF": "Business & Money",
-      "\u79D1\u6280\u8BA4\u77E5": "Science & Curiosity",
-      "\u65B0\u95FB\u7EAA\u5B9E": "News & the World"
-    };
     const ts = (s) => {
       const n = Date.parse(s || "");
       return isNaN(n) ? 0 : n;
@@ -267,36 +270,33 @@
     let catHtml = "";
     for (const cat of CAT_ORDER) {
       if (catBuckets[cat] && catBuckets[cat].length) {
-        catHtml += railSection(cat, CAT_SUB[cat] || "", catBuckets[cat], "cat-rail");
+        catHtml += railSection(cat, "", catBuckets[cat], "cat-rail");
       }
     }
-    const continuing = items.map((it) => ({ it, prefs: loadEpPrefs(it.id) })).filter((x) => x.prefs && typeof x.prefs.t === "number" && x.prefs.t > 0).sort((a, b) => (b.prefs.ts || 0) - (a.prefs.ts || 0)).slice(0, 4);
+    const continuing = items.map((it) => ({ it, prefs: loadEpPrefs(it.id) })).filter((x) => x.prefs != null && typeof x.prefs.t === "number" && x.prefs.t > 0).sort((a, b) => (b.prefs.ts || 0) - (a.prefs.ts || 0)).slice(0, 4);
     let continueHtml = "";
     if (continuing.length) {
       continueHtml = '<section class="section continue-section"><div class="section-head"><h2>\u7EE7\u7EED\u542C</h2><span class="sub">\u4E0A\u6B21\u542C\u5230\u8FD9</span></div><div class="rail-scroll">' + continuing.map((x) => continueCardHtml(x.it, x.prefs)).join("") + "</div></section>";
     }
     app.innerHTML = '<div class="search-wrap"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><input class="search-input" id="searchInput" type="search" placeholder="\u641C\u7D22\u8282\u76EE\u3001\u64AD\u5BA2\u6216\u53E5\u5B50\u2026" autocomplete="off"></div><div id="discoverMain">' + continueHtml + catHtml + '<section class="section"><div class="section-head"><h2>\u6700\u65B0\u66F4\u65B0</h2></div><div class="rail-scroll">' + latest.map(miniCardHtml).join("") + '</div></section><section class="section"><div class="section-head"><h2>\u5168\u90E8\u9891\u9053</h2></div><div class="chan-grid">' + channels.map(chanCardHtml).join("") + '</div></section></div><div id="searchResults" hidden></div>';
     bindNav(app);
-    $("#searchInput").addEventListener("input", (e) => {
+    mustGet("#searchInput").addEventListener("input", (e) => {
       const raw = e.target.value.trim();
       drawDiscoverSearch(raw.toLowerCase(), channels, items);
       scheduleSentenceSearch(raw);
     });
   }
   function chanCardHtml(g) {
-    return '<div class="chan-card" data-go="podcast:' + encodeURIComponent(g.key) + '" tabindex="0" role="link"><div class="cover-wrap">' + coverHtml(g.image, "cover", g.name) + '</div><div class="body"><div class="name-zh">' + escapeHtml(g.name) + "</div></div></div>";
+    return '<div class="chan-card" data-go="podcast:' + encodeURIComponent(g.key) + '" tabindex="0" role="link"><div class="cover-wrap">' + coverHtml(g.image, "cover", g.name) + '</div><div class="body"><div class="name-zh" title="' + escapeHtml(g.name) + '">' + escapeHtml(g.name) + "</div></div></div>";
   }
   function miniCardHtml(it) {
-    const titleZh = it.episode_title_zh || "";
-    const titleEn = it.episode_title || "";
-    const main = titleZh || titleEn;
-    const sub = titleZh ? titleEn : "";
+    const main = it.episode_title_zh || it.episode_title || "";
     const levelLabel = { beginner: "\u5165\u95E8", intermediate: "\u8FDB\u9636", advanced: "\u9AD8\u7EA7" }[it.level || ""] || "";
     const desc = (it.description || "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
     const metaParts = [it.podcast_title || it.podcast_title_zh || ""];
     if (it.duration) metaParts.push(fmtDuration(it.duration));
     if (levelLabel) metaParts.push(levelLabel);
-    return '<div class="mini-card" data-go="ep:' + encodeURIComponent(it.id) + '" tabindex="0" role="link"><div class="cover-wrap">' + coverHtml(it.image, "cover", it.podcast_title) + '</div><div class="body"><div class="t-zh">' + escapeHtml(main) + "</div>" + (sub ? '<div class="t-en">' + escapeHtml(sub) + "</div>" : "") + '<div class="meta">' + metaParts.map(escapeHtml).join(" \xB7 ") + "</div>" + (desc ? '<div class="desc">' + escapeHtml(desc) + "</div>" : "") + "</div></div>";
+    return '<div class="mini-card" data-go="ep:' + encodeURIComponent(it.id) + '" tabindex="0" role="link"><div class="cover-wrap">' + coverHtml(it.image, "cover", it.podcast_title) + '</div><div class="body"><div class="t-zh" title="' + escapeHtml(main) + '">' + escapeHtml(main) + '</div><div class="meta">' + metaParts.map(escapeHtml).join(" \xB7 ") + "</div>" + (desc ? '<div class="desc">' + escapeHtml(desc) + "</div>" : "") + "</div></div>";
   }
   function continueCardHtml(it, prefs) {
     const total = parseDuration(it.duration);
@@ -329,17 +329,20 @@
     bindNav(sec);
     sec.querySelectorAll("[data-seek]").forEach((el) => {
       el.addEventListener("click", () => {
-        const id = el.dataset.go.split(":")[1];
-        pendingSeek = { id: decodeURIComponent(id), t: +el.dataset.seek };
+        const go = el.dataset.go;
+        const seek = el.dataset.seek;
+        if (!go || seek == null) return;
+        const id = go.split(":")[1];
+        pendingSeek = { id: decodeURIComponent(id), t: +seek };
         navStack.push(location.hash || "#/");
-        location.hash = el.dataset.go;
+        location.hash = go;
       });
     });
   }
   var sentenceSearchTimer = null;
   var sentenceSearchSeq = 0;
   function scheduleSentenceSearch(raw) {
-    clearTimeout(sentenceSearchTimer);
+    if (sentenceSearchTimer != null) clearTimeout(sentenceSearchTimer);
     if (!raw) {
       renderSentenceHits("", []);
       return;
@@ -359,7 +362,7 @@
       if (mySeq !== sentenceSearchSeq) return;
       if (currentView.name !== "discover") return;
       renderSentenceHits(raw, data.items || []);
-    } catch (e) {
+    } catch {
     }
   }
   function drawDiscoverSearch(query, channels, items) {
@@ -432,16 +435,14 @@
     if (toggle) {
       toggle.addEventListener("click", () => {
         const desc = $("#podDesc");
+        if (!desc) return;
         const clamped = desc.classList.toggle("clamped");
         toggle.textContent = clamped ? "\u5C55\u5F00" : "\u6536\u8D77";
       });
     }
   }
   function epRowHtml(it, num, showPodcast) {
-    const titleZh = it.episode_title_zh || "";
-    const titleEn = it.episode_title || "";
-    const main = titleZh || titleEn;
-    const sub = titleZh ? titleEn : "";
+    const main = it.episode_title_zh || it.episode_title || "";
     const metaParts = [];
     if (showPodcast) metaParts.push(it.podcast_title || it.podcast_title_zh || "");
     if (it.pub_date) metaParts.push(it.pub_date);
@@ -454,7 +455,7 @@
       const pct = total > 0 ? Math.min(100, Math.round(prefs.t / total * 100)) : 0;
       heardHtml = '<div class="heard">' + (pct > 0 ? '<span class="mini-progress"><span style="width:' + pct + '%"></span></span>' : "") + '<span class="heard-text">\u5DF2\u542C\u81F3 ' + fmtTime(prefs.t) + "</span></div>";
     }
-    return '<div class="ep-row" data-go="ep:' + encodeURIComponent(it.id) + '" tabindex="0" role="link"><span class="num">' + num + '</span><div class="thumb-wrap">' + coverHtml(it.image, "thumb", main) + '</div><div class="info"><div class="t-zh">' + escapeHtml(main) + "</div>" + (sub ? '<div class="t-en">' + escapeHtml(sub) + "</div>" : "") + '<div class="meta">' + metaParts.map(escapeHtml).join(" \xB7 ") + "</div>" + heardHtml + '</div><span class="chev">' + CHEV_SVG + "</span></div>";
+    return '<div class="ep-row" data-go="ep:' + encodeURIComponent(it.id) + '" tabindex="0" role="link"><span class="num">' + num + '</span><div class="thumb-wrap">' + coverHtml(it.image, "thumb", main) + '</div><div class="info"><div class="t-zh">' + escapeHtml(main) + '</div><div class="meta">' + metaParts.map(escapeHtml).join(" \xB7 ") + "</div>" + heardHtml + '</div><span class="chev">' + CHEV_SVG + "</span></div>";
   }
   var SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 2];
   var MODE_ORDER = ["both", "en", "zh"];
@@ -473,7 +474,17 @@
     seeking: false,
     saveTimer: null,
     pairEls: [],
-    rafId: 0
+    rafId: 0,
+    togglePlay: () => {
+    },
+    setVolume: () => {
+    },
+    setLoop: () => {
+    },
+    gotoSentence: () => {
+    },
+    closeSettings: () => {
+    }
   };
   var pendingSeek = null;
   function epStoreKey(id) {
@@ -484,7 +495,7 @@
       const raw = localStorage.getItem(epStoreKey(id));
       if (!raw) return null;
       return JSON.parse(raw);
-    } catch (e) {
+    } catch {
       return null;
     }
   }
@@ -500,7 +511,7 @@
     };
     try {
       localStorage.setItem(epStoreKey(ep.id), JSON.stringify(prefs));
-    } catch (e) {
+    } catch {
     }
   }
   function cleanupEpisode() {
@@ -520,7 +531,8 @@
     ep.audio = null;
     ep.activeIdx = -1;
     ep.loop = false;
-    ep.closeSettings = void 0;
+    ep.closeSettings = () => {
+    };
     ep.pairEls = [];
   }
   async function renderEpisode(id) {
@@ -542,10 +554,7 @@
     }
     const info = data.episode || {};
     const pc = data.podcast || {};
-    const titleZh = info.title_zh || "";
-    const titleEn = info.title || "";
-    const mainTitle = titleZh || titleEn || "\u5355\u671F";
-    const subTitle = titleZh ? titleEn : "";
+    const mainTitle = info.title_zh || info.title || "\u5355\u671F";
     seoBase(
       mainTitle + " \xB7 Cherina Pod",
       (info.description || "").slice(0, 150) + " \u2014 \u4E2D\u82F1\u5BF9\u7167\u9010\u53E5\u7CBE\u542C\u3002",
@@ -558,8 +567,10 @@
     ep.activeIdx = -1;
     ep.loop = false;
     const prefs = loadEpPrefs(id) || {};
-    ep.rate = SPEEDS.includes(prefs.rate) ? prefs.rate : 1;
-    ep.mode = ["both", "en", "zh"].includes(prefs.mode) ? prefs.mode : "both";
+    const rate = prefs.rate;
+    ep.rate = typeof rate === "number" && SPEEDS.includes(rate) ? rate : 1;
+    const mode = prefs.mode;
+    ep.mode = typeof mode === "string" && MODE_ORDER.includes(mode) ? mode : "both";
     ep.fontScale = typeof prefs.font === "number" && prefs.font >= 0.8 && prefs.font <= 1.35 ? prefs.font : 1;
     ep.follow = prefs.follow !== false;
     const cdnSrc = "https://pod-audio.cherina.app/" + encodeURIComponent(id) + ".mp4";
@@ -584,7 +595,7 @@
     const pcName = pc.title || pc.title_zh || "";
     const backHash = "#/podcast/" + encodeURIComponent(pcName);
     const descText = (info.description || "").trim();
-    app.innerHTML = '<div class="ep-layout"><div class="ep-main"><div class="ep-hero"><div class="ep-hero-cover">' + coverHtml(info.image || pc.image, "cover", pcName) + '</div><div class="ep-head"><div class="pc-name">' + escapeHtml(pcName) + "</div><h1>" + escapeHtml(mainTitle) + "</h1>" + (subTitle ? '<div class="title-en-sub">' + escapeHtml(subTitle) + "</div>" : "") + '<div class="meta">' + [info.pub_date, fmtDuration(info.duration)].filter(Boolean).map(escapeHtml).join(" \xB7 ") + "</div></div></div>" + /* 单集简介：主列头部，meta 之下、工具条之上，默认 2 行折叠 */
+    app.innerHTML = '<div class="ep-layout"><div class="ep-main"><div class="ep-hero"><div class="ep-hero-cover">' + coverHtml(info.image || pc.image, "cover", pcName) + '</div><div class="ep-head"><div class="pc-name">' + escapeHtml(pcName) + "</div><h1>" + escapeHtml(mainTitle) + '</h1><div class="meta">' + [info.pub_date, fmtDuration(info.duration)].filter(Boolean).map(escapeHtml).join(" \xB7 ") + "</div></div></div>" + /* 单集简介：主列头部，meta 之下、工具条之上，默认 2 行折叠 */
     (descText ? '<div class="ep-desc-wrap"><div class="ep-desc clamped">' + escapeHtml(descText) + '</div><button class="desc-toggle">\u5C55\u5F00</button></div>' : "") + '<div class="toolbar"><a class="back-link" href="' + backHash + '" title="\u8FD4\u56DE" aria-label="\u8FD4\u56DE" id="epBackLink"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></a><div class="spacer"></div><button class="tbtn" id="modeBtn" title="\u5B57\u5E55\uFF1A' + MODE_LABELS[ep.mode] + '\uFF08\u70B9\u51FB\u5207\u6362\uFF09" aria-label="\u5B57\u5E55\u6A21\u5F0F\uFF1A' + MODE_LABELS[ep.mode] + '"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 8l6 6"/><path d="M4 14l6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="M22 22l-5-10-5 10"/><path d="M14 18h6"/></svg></button><div class="settings-wrap"><button class="tbtn" id="settingsBtn" title="\u5B66\u4E60\u8BBE\u7F6E" aria-label="\u5B66\u4E60\u8BBE\u7F6E" aria-haspopup="true" aria-expanded="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h9M18 6h3M3 12h3M12 12h9M3 18h11M20 18h1"/><circle cx="15" cy="6" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="18" r="2"/></svg></button><div class="settings-pop" id="settingsPop" hidden><div class="set-row"><span class="set-label">\u8DDF\u968F\u5F53\u524D\u53E5</span><span class="set-hint">F</span><button class="switch' + (ep.follow ? " on" : "") + '" id="followBtn" role="switch" aria-checked="' + (ep.follow ? "true" : "false") + '" title="\u8DDF\u968F\u5F53\u524D\u53E5\uFF08F\uFF09" aria-label="\u8DDF\u968F\u5F53\u524D\u53E5"></button></div><div class="set-row"><span class="set-label">\u5B57\u53F7</span><div class="set-stepper"><button class="tbtn" id="fontMinus" title="\u51CF\u5C0F\u5B57\u53F7" aria-label="\u51CF\u5C0F\u5B57\u53F7"><svg viewBox="0 0 24 24" fill="none"><text x="3" y="17" font-size="14" font-weight="800" fill="currentColor" font-family="inherit">A</text><path d="M14 13h7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button><span class="set-val" id="fontVal">' + +ep.fontScale.toFixed(2) + '</span><button class="tbtn" id="fontPlus" title="\u589E\u5927\u5B57\u53F7" aria-label="\u589E\u5927\u5B57\u53F7"><svg viewBox="0 0 24 24" fill="none"><text x="3" y="17" font-size="14" font-weight="800" fill="currentColor" font-family="inherit">A</text><path d="M14 13h7M17.5 9.5v7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button></div></div><button class="set-link" id="helpBtn" title="\u952E\u76D8\u5FEB\u6377\u952E\uFF08?\uFF09"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M6 14h.01M18 14h.01M9 14h6"/></svg>\u952E\u76D8\u5FEB\u6377\u952E<span class="set-hint">?</span></button></div></div></div><div class="list" id="list">' + (ep.pairs.length === 0 ? '<div class="empty"><img class="mascot" src="' + MASCOT + '" alt="">\u8FD9\u671F\u8FD8\u6CA1\u6709\u53E5\u5B50\u6570\u636E</div>' : ep.pairs.map(
       (p, i) => '<div class="pair" data-i="' + i + '"><div class="pair-actions"><button class="pa-btn" data-act="loop" title="\u5FAA\u73AF\u6B64\u53E5" aria-label="\u5FAA\u73AF\u6B64\u53E5"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 2l4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/><path d="M11 10h1v4"/></svg></button><button class="pa-btn" data-act="copy" title="\u590D\u5236\u82F1\u6587" aria-label="\u590D\u5236\u82F1\u6587"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button></div><span class="time">' + fmtTime(p.start) + '</span><div class="en">' + escapeHtml(p.en) + '</div><div class="zh">' + escapeHtml(p.zh) + "</div></div>"
     ).join("")) + '</div></div></div><div class="playbar" id="playbar"><div class="pbar-hit" id="pbarHit" title="\u70B9\u51FB\u6216\u62D6\u62FD\u8DF3\u8F6C"><div class="pbar"><div class="pbar-fill" id="pbarFill"></div></div></div><div class="playbar-row"><div class="pb-cover-wrap">' + coverHtml(info.image || pc.image, "pb-cover", pcName) + '</div><div class="pb-now"><div class="np-line" id="npLine">' + escapeHtml(mainTitle) + '</div><div class="np-sub">' + escapeHtml(pcName) + '</div></div><button class="p-btn" id="back10" title="\u540E\u9000 10 \u79D2"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 17l-5-5 5-5"/><path d="M18 17l-5-5 5-5"/></svg></button><button class="p-btn main" id="playBtn" title="\u64AD\u653E / \u6682\u505C\uFF08\u7A7A\u683C\uFF09"><svg id="playIcon" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l11-6.5z"/></svg></button><button class="p-btn" id="fwd10" title="\u524D\u8FDB 10 \u79D2"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 17l5-5-5-5"/><path d="M6 17l5-5-5-5"/></svg></button><div class="times"><span class="cur" id="curTime">0:00</span> / <span id="durTime">' + escapeHtml(fmtTime(data.duration || parseDuration(info.duration))) + '</span></div><div class="spacer"></div><button class="p-btn" id="loopBtn" title="\u5355\u53E5\u5FAA\u73AF\uFF1A\u5FAA\u73AF\u5F53\u524D\u53E5\uFF0C\u7EC3\u8DDF\u8BFB\uFF08L\uFF09"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 2l4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/><path d="M11 10h1v4"/></svg></button><button class="speed-btn' + (ep.rate === 1 ? " is-one" : "") + '" id="speedBtn" title="\u70B9\u51FB\u5207\u6362\u500D\u901F">' + ep.rate + '\xD7</button><div class="vol-wrap"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 5.5a9 9 0 0 1 0 13"/></svg><input class="vol-range" id="volRange" type="range" min="0" max="1" step="0.05" value="1" title="\u97F3\u91CF"></div></div></div>';
@@ -624,14 +635,14 @@
     if (audioSrc) audio.src = audioSrc;
     ep.audio = audio;
     let triedFallback = false;
-    const playBtn = $("#playBtn");
-    const playIcon = $("#playIcon");
-    const curTimeEl = $("#curTime");
-    const durTimeEl = $("#durTime");
-    const pbarHit = $("#pbarHit");
-    const pbarFill = $("#pbarFill");
-    const speedBtn = $("#speedBtn");
-    const volRange = $("#volRange");
+    const playBtn = mustGet("#playBtn");
+    const playIcon = mustGet("#playIcon");
+    const curTimeEl = mustGet("#curTime");
+    const durTimeEl = mustGet("#durTime");
+    const pbarHit = mustGet("#pbarHit");
+    const pbarFill = mustGet("#pbarFill");
+    const speedBtn = mustGet("#speedBtn");
+    const volRange = mustGet("#volRange");
     audio.playbackRate = ep.rate;
     const ICON_PLAY = '<path d="M8 5.5v13l11-6.5z"/>';
     const ICON_PAUSE = '<path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z"/>';
@@ -639,7 +650,10 @@
       playIcon.innerHTML = audio.paused ? ICON_PLAY : ICON_PAUSE;
     }
     function duration() {
-      return isFinite(audio.duration) && audio.duration > 0 ? audio.duration : ep.data.duration || parseDuration((ep.data.episode || {}).duration) || 0;
+      if (isFinite(audio.duration) && audio.duration > 0) return audio.duration;
+      const data = ep.data;
+      if (!data) return 0;
+      return data.duration || parseDuration((data.episode || {}).duration) || 0;
     }
     function updateProgressUI(t) {
       const d = duration();
@@ -648,10 +662,10 @@
       curTimeEl.textContent = fmtTime(t);
     }
     playBtn.addEventListener("click", togglePlay);
-    $("#back10").addEventListener("click", () => {
+    mustGet("#back10").addEventListener("click", () => {
       audio.currentTime = Math.max(0, audio.currentTime - 10);
     });
-    $("#fwd10").addEventListener("click", () => {
+    mustGet("#fwd10").addEventListener("click", () => {
       audio.currentTime = Math.min(duration(), audio.currentTime + 10);
     });
     function togglePlay() {
@@ -763,7 +777,12 @@
     return -1;
   }
   var followAnim = 0;
+  var REDUCED_MOTION = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   function smoothCenterEl(el) {
+    if (REDUCED_MOTION) {
+      el.scrollIntoView({ block: "center" });
+      return;
+    }
     cancelAnimationFrame(followAnim);
     const r = el.getBoundingClientRect();
     const target = window.scrollY + r.top + r.height / 2 - window.innerHeight / 2;
@@ -810,7 +829,7 @@
       const p = ep.pairs[ep.activeIdx];
       const end = p.end != null ? p.end : Infinity;
       if (t >= end - 0.06 || t < p.start - 0.5) {
-        ep.audio.currentTime = p.start;
+        if (ep.audio) ep.audio.currentTime = p.start;
         return;
       }
     }
@@ -854,7 +873,7 @@
     setLoop(true);
   }
   function setupToolbar() {
-    const modeBtn = $("#modeBtn");
+    const modeBtn = mustGet("#modeBtn");
     const applyMode = () => {
       app.classList.remove("mode-en", "mode-zh");
       if (ep.mode !== "both") app.classList.add("mode-" + ep.mode);
@@ -867,8 +886,8 @@
       toast("\u5B57\u5E55\uFF1A" + MODE_LABELS[ep.mode]);
       saveEpPrefs();
     });
-    const settingsBtn = $("#settingsBtn");
-    const settingsPop = $("#settingsPop");
+    const settingsBtn = mustGet("#settingsBtn");
+    const settingsPop = mustGet("#settingsPop");
     const setPop = (open) => {
       settingsPop.hidden = !open;
       settingsBtn.setAttribute("aria-expanded", open ? "true" : "false");
@@ -880,52 +899,58 @@
     });
     settingsPop.addEventListener("click", (e) => e.stopPropagation());
     ep.closeSettings = () => setPop(false);
-    $("#followBtn").addEventListener("click", () => {
+    const followBtn = mustGet("#followBtn");
+    followBtn.addEventListener("click", () => {
       ep.follow = !ep.follow;
-      $("#followBtn").classList.toggle("on", ep.follow);
-      $("#followBtn").setAttribute("aria-checked", ep.follow ? "true" : "false");
+      followBtn.classList.toggle("on", ep.follow);
+      followBtn.setAttribute("aria-checked", ep.follow ? "true" : "false");
       toast(ep.follow ? "\u8DDF\u968F\u6EDA\u52A8\u5DF2\u5F00\u542F" : "\u8DDF\u968F\u6EDA\u52A8\u5DF2\u5173\u95ED");
       saveEpPrefs();
     });
-    $("#loopBtn").addEventListener("click", () => setLoop(!ep.loop));
+    mustGet("#loopBtn").addEventListener("click", () => setLoop(!ep.loop));
     const applyFont = () => {
       document.documentElement.style.setProperty("--pair-scale", String(ep.fontScale));
       const val = $("#fontVal");
       if (val) val.textContent = String(+ep.fontScale.toFixed(2));
       saveEpPrefs();
     };
-    $("#fontMinus").addEventListener("click", () => {
+    mustGet("#fontMinus").addEventListener("click", () => {
       ep.fontScale = Math.max(0.8, +(ep.fontScale - 0.07).toFixed(2));
       applyFont();
     });
-    $("#fontPlus").addEventListener("click", () => {
+    mustGet("#fontPlus").addEventListener("click", () => {
       ep.fontScale = Math.min(1.35, +(ep.fontScale + 0.07).toFixed(2));
       applyFont();
     });
-    $("#helpBtn").addEventListener("click", () => {
+    mustGet("#helpBtn").addEventListener("click", () => {
       setPop(false);
-      $("#shortcutModal").classList.add("open");
+      mustGet("#shortcutModal").classList.add("open");
     });
   }
   function setupList() {
     ep.pairEls = Array.from(document.querySelectorAll(".pair"));
     ep.pairEls.forEach((el) => {
-      el.addEventListener("click", () => gotoSentence(+el.dataset.i, true));
+      el.addEventListener("click", () => {
+        const idx = Number(el.dataset.i);
+        if (Number.isNaN(idx)) return;
+        gotoSentence(idx, true);
+      });
       el.querySelectorAll(".pa-btn").forEach((btn) => {
         btn.addEventListener("click", (e) => {
           e.stopPropagation();
-          const i = +el.dataset.i;
+          const idx = Number(el.dataset.i);
+          if (Number.isNaN(idx)) return;
           if (btn.dataset.act === "loop") {
-            loopThisSentence(i);
+            loopThisSentence(idx);
           } else if (btn.dataset.act === "copy") {
-            copyText(ep.pairs[i].en || "").then(() => toast("\u5DF2\u590D\u5236\u82F1\u6587"));
+            copyText(ep.pairs[idx].en || "").then(() => toast("\u5DF2\u590D\u5236\u82F1\u6587"));
           }
         });
       });
     });
   }
-  var modal = $("#shortcutModal");
-  $("#modalClose").addEventListener("click", () => modal.classList.remove("open"));
+  var modal = mustGet("#shortcutModal");
+  mustGet("#modalClose").addEventListener("click", () => modal.classList.remove("open"));
   modal.addEventListener("click", (e) => {
     if (e.target === modal) modal.classList.remove("open");
   });
@@ -939,7 +964,7 @@
       }
       const pop = $("#settingsPop");
       if (pop && !pop.hidden) {
-        if (ep.closeSettings) ep.closeSettings();
+        ep.closeSettings();
         return;
       }
       if (currentView.name === "episode" && ep.data) {
@@ -995,14 +1020,14 @@
   });
   document.addEventListener("click", () => {
     const pop = $("#settingsPop");
-    if (pop && !pop.hidden && ep.closeSettings) ep.closeSettings();
+    if (pop && !pop.hidden) ep.closeSettings();
   });
   window.addEventListener("beforeunload", saveEpPrefs);
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => navigator.serviceWorker.register("./sw.js"));
   }
   var deferredPrompt = null;
-  var installBtn = $("#installBtn");
+  var installBtn = mustGet("#installBtn");
   window.addEventListener("beforeinstallprompt", ((e) => {
     e.preventDefault();
     deferredPrompt = e;

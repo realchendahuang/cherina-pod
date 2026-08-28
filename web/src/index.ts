@@ -1,6 +1,6 @@
 // cherina-pod：D1 数据 API + 静态资产透传。
 // - 节目数据（发现页 /api/episodes、详情页 /api/episodes/:id、搜索 /api/search）全部走 D1
-// - 静态资产：index.html / 字体 / 图片 / charts.json / sitemap.xml 由 ASSETS 分发
+// - 静态资产：index.html / 字体 / 图片 / sitemap.xml 由 ASSETS 分发
 // - 音频走 RustFS（前端拼 https://pod-audio.cherina.app/<id>.mp4，不在本 Worker 范围）
 import type { D1Database, Fetcher } from '@cloudflare/workers-types';
 
@@ -58,7 +58,7 @@ async function handleSearch(env: Env, url: URL): Promise<Response> {
       LIMIT 50
     `).bind(q).all<SearchRow>();
     return json({ count: results.length, items: results, query: q });
-  } catch (e) {
+  } catch {
     // FTS5 语法错误（撇号、非法操作符等）降级为 LIKE
     return fallbackLike(env, q);
   }

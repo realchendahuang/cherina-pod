@@ -80,9 +80,17 @@ interface EpPrefs {
 /* ================= 工具 ================= */
 const $ = (sel: string, root?: ParentNode): HTMLElement | null =>
   (root || document).querySelector(sel);
-const app = $('#app')!;
-const container = $('#container')!;
-const toastEl = $('#toast')!;
+
+// 静态 DOM 元素（index.html 中必然存在）：找不到即抛错，避免静默 ! 断言掩盖 HTML 结构变更。
+function mustGet(sel: string): HTMLElement {
+  const el = $(sel);
+  if (!el) throw new Error('缺少必需元素：' + sel);
+  return el;
+}
+
+const app = mustGet('#app');
+const container = mustGet('#container');
+const toastEl = mustGet('#toast');
 const MASCOT = './brand/cherina-mascot-companion.png';
 
 function escapeHtml(s: unknown): string {
@@ -125,7 +133,7 @@ let toastTimer: ReturnType<typeof setTimeout> | null = null;
 function toast(msg: string): void {
   toastEl.textContent = msg;
   toastEl.classList.add('show');
-  clearTimeout(toastTimer!);
+  if (toastTimer != null) clearTimeout(toastTimer);
   toastTimer = setTimeout(() => toastEl.classList.remove('show'), 1400);
 }
 
@@ -142,7 +150,7 @@ function fallbackCopy(t: string): void {
   ta.style.opacity = '0';
   document.body.appendChild(ta);
   ta.select();
-  try { document.execCommand('copy'); } catch (e) { /* 忽略 */ }
+  try { document.execCommand('copy'); } catch { /* 忽略 */ }
   ta.remove();
 }
 
@@ -159,7 +167,7 @@ function initTheme(): void {
   const saved = localStorage.getItem(THEME_KEY);
   applyTheme(saved === 'dark' ? 'dark' : 'light'); // 纸白是标志性风格，默认亮
 }
-$('#themeBtn')!.addEventListener('click', () => {
+mustGet('#themeBtn').addEventListener('click', () => {
   const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
   applyTheme(next);
   localStorage.setItem(THEME_KEY, next);
@@ -221,8 +229,9 @@ async function loadIndex(): Promise<{ count: number; items: EpisodeItem[] }> {
   if (indexCache) return indexCache;
   const resp = await fetch('/api/episodes', { cache: 'no-store' });
   if (!resp.ok) throw new Error('HTTP ' + resp.status);
-  indexCache = await resp.json();
-  return indexCache!;
+  const data: { count: number; items: EpisodeItem[] } = await resp.json();
+  indexCache = data;
+  return data;
 }
 
 /* 播客分组（以英文名做稳定 key；播客名全站只展示英文原名，title_zh 仅留作搜索兼容） */
@@ -241,7 +250,8 @@ function groupChannels(items: EpisodeItem[]): Channel[] {
         pairs: 0,
       });
     }
-    const g = map.get(key)!;
+    const g = map.get(key);
+    if (!g) continue;
     g.episodes.push(it);
     g.pairs += it.pairs_count || 0;
     if (!g.image && it.image) g.image = it.image;
@@ -259,7 +269,8 @@ const navStack: string[] = [];
 
 // 返回目标解析：优先回到来源页，栈空（深链直达）才退回逻辑父级。
 function backTarget(): string {
-  if (navStack.length) return navStack.pop()!;
+  const prev = navStack.pop();
+  if (prev) return prev;
   if (currentView.name === 'episode') {
     const pc = (ep.data && ep.data.podcast) || {};
     const key = pc.title || pc.title_zh || '';
@@ -297,7 +308,8 @@ window.addEventListener('popstate', route);
 function bindNav(root: ParentNode): void {
   root.querySelectorAll<HTMLElement>('[data-go]').forEach(el => {
     const open = () => {
-      const v = el.dataset.go!;
+      const v = el.dataset.go;
+      if (!v) return;
       const i = v.indexOf(':');
       const type = v.slice(0, i);
       const payload = v.slice(i + 1);
@@ -366,21 +378,15 @@ async function renderDiscover(): Promise<void> {
     })),
   });
 
-  // 内容型首页组织：继续听 → 内容主题 → 最新 → 全部频道 → 榜单
+  // 内容型首页组织：继续听 → 内容主题 → 最新 → 全部频道
   const catBuckets: Record<string, EpisodeItem[]> = {};
   for (const it of items) {
     const cat = it.category || '其他';
     (catBuckets[cat] || (catBuckets[cat] = [])).push(it);
   }
 
-  // 内容主题（兴趣导向），固定顺序只渲染非空桶
+  // 内容主题（兴趣导向），固定顺序只渲染非空桶；区块标题只出中文，不中英并排
   const CAT_ORDER = ['英语学习', '商业财经', '科技认知', '新闻纪实'];
-  const CAT_SUB: Record<string, string> = {
-    '英语学习': 'English Learning',
-    '商业财经': 'Business & Money',
-    '科技认知': 'Science & Curiosity',
-    '新闻纪实': 'News & the World',
-  };
 
   const ts = (s: string | undefined): number => { const n = Date.parse(s || ''); return isNaN(n) ? 0 : n; };
   const latest = items.slice().sort((a, b) => {
@@ -401,22 +407,23 @@ async function renderDiscover(): Promise<void> {
   let catHtml = '';
   for (const cat of CAT_ORDER) {
     if (catBuckets[cat] && catBuckets[cat].length) {
-      catHtml += railSection(cat, CAT_SUB[cat] || '', catBuckets[cat], 'cat-rail');
+      catHtml += railSection(cat, '', catBuckets[cat], 'cat-rail');
     }
   }
 
   // 继续听：读 localStorage 里各期收听进度，按最近收听排序，取前 4
   const continuing = items
     .map(it => ({ it, prefs: loadEpPrefs(it.id) }))
-    .filter(x => x.prefs && typeof x.prefs.t === 'number' && x.prefs.t > 0)
-    .sort((a, b) => (b.prefs!.ts || 0) - (a.prefs!.ts || 0))
+    .filter((x): x is { it: EpisodeItem; prefs: EpPrefs } =>
+      x.prefs != null && typeof x.prefs.t === 'number' && x.prefs.t > 0)
+    .sort((a, b) => (b.prefs.ts || 0) - (a.prefs.ts || 0))
     .slice(0, 4);
   let continueHtml = '';
   if (continuing.length) {
     continueHtml =
       '<section class="section continue-section">' +
         '<div class="section-head"><h2>继续听</h2><span class="sub">上次听到这</span></div>' +
-        '<div class="rail-scroll">' + continuing.map(x => continueCardHtml(x.it, x.prefs!)).join('') + '</div>' +
+        '<div class="rail-scroll">' + continuing.map(x => continueCardHtml(x.it, x.prefs)).join('') + '</div>' +
       '</section>';
   }
 
@@ -444,7 +451,7 @@ async function renderDiscover(): Promise<void> {
     '<div id="searchResults" hidden></div>';
 
   bindNav(app);
-  $('#searchInput')!.addEventListener('input', e => {
+  mustGet('#searchInput').addEventListener('input', e => {
     const raw = (e.target as HTMLInputElement).value.trim();
     drawDiscoverSearch(raw.toLowerCase(), channels, items);
     scheduleSentenceSearch(raw);
@@ -459,7 +466,7 @@ function chanCardHtml(g: Channel): string {
         coverHtml(g.image, 'cover', g.name) +
       '</div>' +
       '<div class="body">' +
-        '<div class="name-zh">' + escapeHtml(g.name) + '</div>' +
+        '<div class="name-zh" title="' + escapeHtml(g.name) + '">' + escapeHtml(g.name) + '</div>' +
       '</div>' +
     '</div>'
   );
@@ -467,10 +474,8 @@ function chanCardHtml(g: Channel): string {
 
 /* 发现页 rail 单集小卡 */
 function miniCardHtml(it: EpisodeItem): string {
-  const titleZh = it.episode_title_zh || '';
-  const titleEn = it.episode_title || '';
-  const main = titleZh || titleEn;
-  const sub = titleZh ? titleEn : '';
+  // 标题只出一种语言：有中文用中文，否则英文，不中英混排
+  const main = it.episode_title_zh || it.episode_title || '';
   const levelLabel = { beginner: '入门', intermediate: '进阶', advanced: '高级' }[it.level || ''] || '';
   // 一句话简介：用 D1 已存的完整 description，去 HTML 后截断
   const desc = (it.description || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
@@ -481,8 +486,7 @@ function miniCardHtml(it: EpisodeItem): string {
     '<div class="mini-card" data-go="ep:' + encodeURIComponent(it.id) + '" tabindex="0" role="link">' +
       '<div class="cover-wrap">' + coverHtml(it.image, 'cover', it.podcast_title) + '</div>' +
       '<div class="body">' +
-        '<div class="t-zh">' + escapeHtml(main) + '</div>' +
-        (sub ? '<div class="t-en">' + escapeHtml(sub) + '</div>' : '') +
+        '<div class="t-zh" title="' + escapeHtml(main) + '">' + escapeHtml(main) + '</div>' +
         '<div class="meta">' + metaParts.map(escapeHtml).join(' · ') + '</div>' +
         (desc ? '<div class="desc">' + escapeHtml(desc) + '</div>' : '') +
       '</div>' +
@@ -552,10 +556,13 @@ function renderSentenceHits(query: string, rows: SearchResult[] | null | undefin
   // 覆盖 bindNav 默认跳转：记录 seek 目标
   sec.querySelectorAll<HTMLElement>('[data-seek]').forEach(el => {
     el.addEventListener('click', () => {
-      const id = el.dataset.go!.split(':')[1];
-      pendingSeek = { id: decodeURIComponent(id), t: +el.dataset.seek! };
+      const go = el.dataset.go;
+      const seek = el.dataset.seek;
+      if (!go || seek == null) return;
+      const id = go.split(':')[1];
+      pendingSeek = { id: decodeURIComponent(id), t: +seek };
       navStack.push(location.hash || '#/');
-      location.hash = el.dataset.go!;
+      location.hash = go;
     });
   });
 }
@@ -564,7 +571,7 @@ function renderSentenceHits(query: string, rows: SearchResult[] | null | undefin
 let sentenceSearchTimer: ReturnType<typeof setTimeout> | null = null;
 let sentenceSearchSeq = 0;
 function scheduleSentenceSearch(raw: string): void {
-  clearTimeout(sentenceSearchTimer!);
+  if (sentenceSearchTimer != null) clearTimeout(sentenceSearchTimer);
   if (!raw) { renderSentenceHits('', []); return; }
   if (raw.length < 2) { renderSentenceHits('', []); return; }
   sentenceSearchTimer = setTimeout(() => runSentenceSearch(raw), 250);
@@ -578,7 +585,7 @@ async function runSentenceSearch(raw: string): Promise<void> {
     if (mySeq !== sentenceSearchSeq) return; // 过期响应丢弃
     if (currentView.name !== 'discover') return;
     renderSentenceHits(raw, data.items || []);
-  } catch (e) {
+  } catch {
     // D1 未就绪/网络失败：静默降级为纯标题搜索
   }
 }
@@ -713,7 +720,8 @@ async function renderPodcast(key: string): Promise<void> {
   if (toggle) {
     toggle.addEventListener('click', () => {
       const desc = $('#podDesc');
-      const clamped = desc!.classList.toggle('clamped');
+      if (!desc) return;
+      const clamped = desc.classList.toggle('clamped');
       toggle.textContent = clamped ? '展开' : '收起';
     });
   }
@@ -721,10 +729,8 @@ async function renderPodcast(key: string): Promise<void> {
 
 /* 单集行（频道页 / 搜索结果共用） */
 function epRowHtml(it: EpisodeItem, num: number, showPodcast: boolean): string {
-  const titleZh = it.episode_title_zh || '';
-  const titleEn = it.episode_title || '';
-  const main = titleZh || titleEn;
-  const sub = titleZh ? titleEn : '';
+  // 标题只出一种语言（与发现页卡片一致）
+  const main = it.episode_title_zh || it.episode_title || '';
   const metaParts: string[] = [];
   if (showPodcast) metaParts.push(it.podcast_title || it.podcast_title_zh || '');
   if (it.pub_date) metaParts.push(it.pub_date);
@@ -750,7 +756,6 @@ function epRowHtml(it: EpisodeItem, num: number, showPodcast: boolean): string {
       '<div class="thumb-wrap">' + coverHtml(it.image, 'thumb', main) + '</div>' +
       '<div class="info">' +
         '<div class="t-zh">' + escapeHtml(main) + '</div>' +
-        (sub ? '<div class="t-en">' + escapeHtml(sub) + '</div>' : '') +
         '<div class="meta">' + metaParts.map(escapeHtml).join(' · ') + '</div>' +
         heardHtml +
       '</div>' +
@@ -764,8 +769,10 @@ const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 2];
 const MODE_ORDER = ['both', 'en', 'zh'];
 const MODE_LABELS: Record<string, string> = { both: '双语', en: '仅英文', zh: '仅中文' };
 
-// 当前单期会话状态（离开页面即弃）
-const ep: {
+// 当前单期会话状态（离开页面即弃）。
+// 播放器/工具条在 setupPlayer / setupToolbar 中回填这些回调；初始为 no-op，
+// 保证键盘快捷键等路径无需判空即可安全调用。
+interface EpisodeSession {
   id: string | null;
   data: EpisodeDetail | null;
   pairs: Pair[];
@@ -780,12 +787,14 @@ const ep: {
   saveTimer: ReturnType<typeof setInterval> | null;
   pairEls: HTMLElement[];
   rafId: number;
-  togglePlay?: () => void;
-  setVolume?: (v: number) => void;
-  setLoop?: (on: boolean) => void;
-  gotoSentence?: (i: number, autoplay: boolean) => void;
-  closeSettings?: () => void;
-} = {
+  togglePlay: () => void;
+  setVolume: (v: number) => void;
+  setLoop: (on: boolean) => void;
+  gotoSentence: (i: number, autoplay: boolean) => void;
+  closeSettings: () => void;
+}
+
+const ep: EpisodeSession = {
   id: null,
   data: null,
   pairs: [],
@@ -800,6 +809,11 @@ const ep: {
   saveTimer: null,
   pairEls: [],
   rafId: 0,
+  togglePlay: () => {},
+  setVolume: () => {},
+  setLoop: () => {},
+  gotoSentence: () => {},
+  closeSettings: () => {},
 };
 
 // 跨期句子搜索命中后跳详情页自动定位到该句（id + 起始秒）
@@ -812,7 +826,7 @@ function loadEpPrefs(id: string): EpPrefs | null {
     const raw = localStorage.getItem(epStoreKey(id));
     if (!raw) return null;
     return JSON.parse(raw);
-  } catch (e) { return null; }
+  } catch { return null; }
 }
 
 function saveEpPrefs(): void {
@@ -825,7 +839,7 @@ function saveEpPrefs(): void {
     follow: ep.follow,
     ts: Date.now(),
   };
-  try { localStorage.setItem(epStoreKey(ep.id), JSON.stringify(prefs)); } catch (e) { /* 忽略 */ }
+  try { localStorage.setItem(epStoreKey(ep.id), JSON.stringify(prefs)); } catch { /* 忽略 */ }
 }
 
 function cleanupEpisode(): void {
@@ -842,7 +856,7 @@ function cleanupEpisode(): void {
   ep.audio = null;
   ep.activeIdx = -1;
   ep.loop = false;
-  ep.closeSettings = undefined;
+  ep.closeSettings = () => {};
   ep.pairEls = [];
 }
 
@@ -871,10 +885,8 @@ async function renderEpisode(id: string): Promise<void> {
 
   const info = data.episode || {};
   const pc = data.podcast || {};
-  const titleZh = info.title_zh || '';
-  const titleEn = info.title || '';
-  const mainTitle = titleZh || titleEn || '单期';
-  const subTitle = titleZh ? titleEn : '';
+  // 标题只出一种语言（与列表卡片一致）
+  const mainTitle = info.title_zh || info.title || '单期';
   // SEO：单集页描述 + 结构化数据（音频 URL 在下方 cdnSrc 定义后补全）
   seoBase(
     mainTitle + ' · Cherina Pod',
@@ -891,8 +903,10 @@ async function renderEpisode(id: string): Promise<void> {
 
   // 恢复偏好
   const prefs: Partial<EpPrefs> = loadEpPrefs(id) || {};
-  ep.rate = SPEEDS.includes(prefs.rate!) ? prefs.rate! : 1;
-  ep.mode = ['both', 'en', 'zh'].includes(prefs.mode!) ? prefs.mode! : 'both';
+  const rate = prefs.rate;
+  ep.rate = typeof rate === 'number' && SPEEDS.includes(rate) ? rate : 1;
+  const mode = prefs.mode;
+  ep.mode = typeof mode === 'string' && MODE_ORDER.includes(mode) ? mode : 'both';
   ep.fontScale = (typeof prefs.font === 'number' && prefs.font >= 0.8 && prefs.font <= 1.35) ? prefs.font : 1;
   ep.follow = prefs.follow !== false;
 
@@ -928,13 +942,12 @@ async function renderEpisode(id: string): Promise<void> {
   app.innerHTML =
     '<div class="ep-layout">' +
       '<div class="ep-main">' +
-        /* Hero：封面 + 播客名 + 中文主标题 + 英文副行 + 元信息（与双语列表同列，宽度对齐） */
+        /* Hero：封面 + 播客名 + 单语主标题 + 元信息（与双语列表同列，宽度对齐） */
         '<div class="ep-hero">' +
           '<div class="ep-hero-cover">' + coverHtml(info.image || pc.image, 'cover', pcName) + '</div>' +
           '<div class="ep-head">' +
             '<div class="pc-name">' + escapeHtml(pcName) + '</div>' +
             '<h1>' + escapeHtml(mainTitle) + '</h1>' +
-            (subTitle ? '<div class="title-en-sub">' + escapeHtml(subTitle) + '</div>' : '') +
             '<div class="meta">' +
               [info.pub_date, fmtDuration(info.duration)].filter(Boolean).map(escapeHtml).join(' · ') +
             '</div>' +
@@ -1089,14 +1102,14 @@ function setupPlayer(audioSrc: string, prefs: Partial<EpPrefs>, fallbackSrc: str
   // 远程源失败时回退本地文件（每次进详情页只回退一次，切期自然重置）
   let triedFallback = false;
 
-  const playBtn = $('#playBtn')!;
-  const playIcon = $('#playIcon')!;
-  const curTimeEl = $('#curTime')!;
-  const durTimeEl = $('#durTime')!;
-  const pbarHit = $('#pbarHit')!;
-  const pbarFill = $('#pbarFill')!;
-  const speedBtn = $('#speedBtn')!;
-  const volRange = $('#volRange') as HTMLInputElement;
+  const playBtn = mustGet('#playBtn');
+  const playIcon = mustGet('#playIcon');
+  const curTimeEl = mustGet('#curTime');
+  const durTimeEl = mustGet('#durTime');
+  const pbarHit = mustGet('#pbarHit');
+  const pbarFill = mustGet('#pbarFill');
+  const speedBtn = mustGet('#speedBtn');
+  const volRange = mustGet('#volRange') as HTMLInputElement;
 
   audio.playbackRate = ep.rate;
 
@@ -1108,7 +1121,10 @@ function setupPlayer(audioSrc: string, prefs: Partial<EpPrefs>, fallbackSrc: str
   }
 
   function duration(): number {
-    return (isFinite(audio.duration) && audio.duration > 0) ? audio.duration : (ep.data!.duration || parseDuration((ep.data!.episode || {}).duration) || 0);
+    if (isFinite(audio.duration) && audio.duration > 0) return audio.duration;
+    const data = ep.data;
+    if (!data) return 0;
+    return data.duration || parseDuration((data.episode || {}).duration) || 0;
   }
 
   function updateProgressUI(t: number): void {
@@ -1119,8 +1135,8 @@ function setupPlayer(audioSrc: string, prefs: Partial<EpPrefs>, fallbackSrc: str
   }
 
   playBtn.addEventListener('click', togglePlay);
-  $('#back10')!.addEventListener('click', () => { audio.currentTime = Math.max(0, audio.currentTime - 10); });
-  $('#fwd10')!.addEventListener('click', () => { audio.currentTime = Math.min(duration(), audio.currentTime + 10); });
+  mustGet('#back10').addEventListener('click', () => { audio.currentTime = Math.max(0, audio.currentTime - 10); });
+  mustGet('#fwd10').addEventListener('click', () => { audio.currentTime = Math.min(duration(), audio.currentTime + 10); });
 
   function togglePlay(): void {
     if (!audioSrc) { toast('这期没有音频'); return; }
@@ -1223,7 +1239,7 @@ function findPairIndex(t: number): number {
     else hi = mid - 1;
   }
   if (ans >= 0) {
-    const p = pairs[ans]!;
+    const p = pairs[ans];
     if (t < (p.end != null ? p.end : Infinity)) return ans;
     if (t >= p.start) return ans;
   }
@@ -1232,7 +1248,9 @@ function findPairIndex(t: number): number {
 
 /* 丝滑跟读定位：手写 easeOutCubic 滚动，新目标到达即接力，用户手动滚动立即让位 */
 let followAnim = 0;
+const REDUCED_MOTION = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 function smoothCenterEl(el: HTMLElement): void {
+  if (REDUCED_MOTION) { el.scrollIntoView({ block: 'center' }); return; }
   cancelAnimationFrame(followAnim);
   const r = el.getBoundingClientRect();
   const target = window.scrollY + r.top + r.height / 2 - window.innerHeight / 2;
@@ -1284,7 +1302,7 @@ function handlePosition(t: number): void {
     const p = ep.pairs[ep.activeIdx];
     const end = p.end != null ? p.end : Infinity;
     if (t >= end - 0.06 || t < p.start - 0.5) {
-      ep.audio!.currentTime = p.start;
+      if (ep.audio) ep.audio.currentTime = p.start;
       return;
     }
   }
@@ -1332,7 +1350,7 @@ function loopThisSentence(i: number): void {
 /* ---------- 学习工具条 ---------- */
 function setupToolbar(): void {
   // 字幕模式：单图标循环切换（双语 → 仅英文 → 仅中文）
-  const modeBtn = $('#modeBtn')!;
+  const modeBtn = mustGet('#modeBtn');
   const applyMode = () => {
     app.classList.remove('mode-en', 'mode-zh');
     if (ep.mode !== 'both') app.classList.add('mode-' + ep.mode);
@@ -1347,8 +1365,8 @@ function setupToolbar(): void {
   });
 
   // 设置 popover：开合 + aria
-  const settingsBtn = $('#settingsBtn')!;
-  const settingsPop = $('#settingsPop')!;
+  const settingsBtn = mustGet('#settingsBtn');
+  const settingsPop = mustGet('#settingsPop');
   const setPop = (open: boolean) => {
     settingsPop.hidden = !open;
     settingsBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
@@ -1362,16 +1380,17 @@ function setupToolbar(): void {
   ep.closeSettings = () => setPop(false);
 
   // 跟随滚动
-  $('#followBtn')!.addEventListener('click', () => {
+  const followBtn = mustGet('#followBtn');
+  followBtn.addEventListener('click', () => {
     ep.follow = !ep.follow;
-    $('#followBtn')!.classList.toggle('on', ep.follow);
-    $('#followBtn')!.setAttribute('aria-checked', ep.follow ? 'true' : 'false');
+    followBtn.classList.toggle('on', ep.follow);
+    followBtn.setAttribute('aria-checked', ep.follow ? 'true' : 'false');
     toast(ep.follow ? '跟随滚动已开启' : '跟随滚动已关闭');
     saveEpPrefs();
   });
 
   // 单句循环（吸底条）
-  $('#loopBtn')!.addEventListener('click', () => setLoop(!ep.loop));
+  mustGet('#loopBtn').addEventListener('click', () => setLoop(!ep.loop));
 
   // 字号
   const applyFont = () => {
@@ -1380,19 +1399,19 @@ function setupToolbar(): void {
     if (val) val.textContent = String(+ep.fontScale.toFixed(2));
     saveEpPrefs();
   };
-  $('#fontMinus')!.addEventListener('click', () => {
+  mustGet('#fontMinus').addEventListener('click', () => {
     ep.fontScale = Math.max(0.8, +(ep.fontScale - 0.07).toFixed(2));
     applyFont();
   });
-  $('#fontPlus')!.addEventListener('click', () => {
+  mustGet('#fontPlus').addEventListener('click', () => {
     ep.fontScale = Math.min(1.35, +(ep.fontScale + 0.07).toFixed(2));
     applyFont();
   });
 
   // 快捷键说明
-  $('#helpBtn')!.addEventListener('click', () => {
+  mustGet('#helpBtn').addEventListener('click', () => {
     setPop(false);
-    $('#shortcutModal')!.classList.add('open');
+    mustGet('#shortcutModal').classList.add('open');
   });
 }
 
@@ -1400,15 +1419,20 @@ function setupToolbar(): void {
 function setupList(): void {
   ep.pairEls = Array.from(document.querySelectorAll<HTMLElement>('.pair'));
   ep.pairEls.forEach(el => {
-    el.addEventListener('click', () => gotoSentence(+el.dataset.i!, true));
+    el.addEventListener('click', () => {
+      const idx = Number(el.dataset.i);
+      if (Number.isNaN(idx)) return;
+      gotoSentence(idx, true);
+    });
     el.querySelectorAll<HTMLElement>('.pa-btn').forEach(btn => {
       btn.addEventListener('click', e => {
         e.stopPropagation();
-        const i = +el.dataset.i!;
+        const idx = Number(el.dataset.i);
+        if (Number.isNaN(idx)) return;
         if (btn.dataset.act === 'loop') {
-          loopThisSentence(i);
+          loopThisSentence(idx);
         } else if (btn.dataset.act === 'copy') {
-          copyText(ep.pairs[i].en || '').then(() => toast('已复制英文'));
+          copyText(ep.pairs[idx].en || '').then(() => toast('已复制英文'));
         }
       });
     });
@@ -1416,8 +1440,8 @@ function setupList(): void {
 }
 
 /* ================= 快捷键弹层 ================= */
-const modal = $('#shortcutModal')!;
-$('#modalClose')!.addEventListener('click', () => modal.classList.remove('open'));
+const modal = mustGet('#shortcutModal');
+mustGet('#modalClose').addEventListener('click', () => modal.classList.remove('open'));
 modal.addEventListener('click', e => { if (e.target === modal) modal.classList.remove('open'); });
 
 /* ================= 键盘快捷键 ================= */
@@ -1428,7 +1452,7 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Escape') {
     if (modal.classList.contains('open')) { modal.classList.remove('open'); return; }
     const pop = $('#settingsPop');
-    if (pop && !pop.hidden) { if (ep.closeSettings) ep.closeSettings(); return; }
+    if (pop && !pop.hidden) { ep.closeSettings(); return; }
     if (currentView.name === 'episode' && ep.data) {
       location.hash = backTarget();
       return;
@@ -1445,7 +1469,7 @@ document.addEventListener('keydown', e => {
   switch (e.key) {
     case ' ':
       e.preventDefault();
-      ep.togglePlay!();
+      ep.togglePlay();
       break;
     case 'ArrowLeft':
       e.preventDefault();
@@ -1457,12 +1481,12 @@ document.addEventListener('keydown', e => {
       break;
     case 'ArrowUp':
       e.preventDefault();
-      ep.setVolume!(ep.audio.volume + 0.1);
+      ep.setVolume(ep.audio.volume + 0.1);
       toast('音量 ' + Math.round(ep.audio.volume * 100) + '%');
       break;
     case 'ArrowDown':
       e.preventDefault();
-      ep.setVolume!(ep.audio.volume - 0.1);
+      ep.setVolume(ep.audio.volume - 0.1);
       toast('音量 ' + Math.round(ep.audio.volume * 100) + '%');
       break;
     case 'l': case 'L':
@@ -1481,7 +1505,7 @@ document.addEventListener('keydown', e => {
 // 点击 popover 外部时收起（全局只注册一次）
 document.addEventListener('click', () => {
   const pop = $('#settingsPop');
-  if (pop && !pop.hidden && ep.closeSettings) ep.closeSettings();
+  if (pop && !pop.hidden) ep.closeSettings();
 });
 window.addEventListener('beforeunload', saveEpPrefs);
 // PWA：注册 Service Worker（离线缓存 app shell 与已浏览节目）
@@ -1490,7 +1514,7 @@ if ('serviceWorker' in navigator) {
 }
 // PWA：安装引导（仅桌面/Android 支持 beforeinstallprompt 时显示）
 let deferredPrompt: BeforeInstallPromptEvent | null = null;
-const installBtn = $('#installBtn')!;
+const installBtn = mustGet('#installBtn');
 window.addEventListener('beforeinstallprompt', ((e: BeforeInstallPromptEvent) => {
   e.preventDefault();
   deferredPrompt = e;
