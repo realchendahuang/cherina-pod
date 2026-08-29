@@ -155,13 +155,15 @@ function fallbackCopy(t: string): void {
 }
 
 const CHEV_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>';
+const BACK_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>';
+const LOOP_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 2l4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/><path d="M11 10h1v4"/></svg>';
 
 /* ================= 主题（默认亮色，localStorage 记忆） ================= */
 const THEME_KEY = 'cherina:theme';
 function applyTheme(t: string): void {
   document.documentElement.dataset.theme = t;
   const meta = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
-  if (meta) meta.content = t === 'dark' ? '#121110' : '#fbfaf8'; // 与 --app-bg 同步
+  if (meta) meta.content = t === 'dark' ? '#141211' : '#f7f6f3'; // 与 --app-page-bg 同步
 }
 function initTheme(): void {
   const saved = localStorage.getItem(THEME_KEY);
@@ -301,10 +303,13 @@ function route(): void {
     renderDiscover();
   }
 }
+// 只监听 hashchange：Chrome 对 location.hash 赋值会同时触发 popstate + hashchange，
+// 双监听会让 route() 每次跳转跑两遍（双 fetch、双渲染，还会冲掉句子定位高亮）；
+// hash 路由下前进/后退同样会触发 hashchange，popstate 监听是多余的。
 window.addEventListener('hashchange', route);
-window.addEventListener('popstate', route);
 
-/* 通用可点元素绑定：data-go="ep:<encId>" | "podcast:<encKey>" | "ext:<url>" */
+/* 通用可点元素绑定：data-go="ep:<encId>" | "podcast:<encKey>" | "ext:<url>"
+   ep 目标可带 data-seek="<秒>"（句子搜索命中）：记录跳转后定位目标句 */
 function bindNav(root: ParentNode): void {
   root.querySelectorAll<HTMLElement>('[data-go]').forEach(el => {
     const open = () => {
@@ -315,10 +320,14 @@ function bindNav(root: ParentNode): void {
       const payload = v.slice(i + 1);
       if (type === 'ext') {
         window.open(payload, '_blank', 'noopener');
-      } else {
-        navStack.push(location.hash || '#/');
-        location.hash = '#/' + type + '/' + payload;
+        return;
       }
+      const seek = el.dataset.seek;
+      if (type === 'ep' && seek != null) {
+        pendingSeek = { id: decodeURIComponent(payload), t: +seek };
+      }
+      navStack.push(location.hash || '#/');
+      location.hash = '#/' + type + '/' + payload;
     };
     el.addEventListener('click', open);
     el.addEventListener('keydown', e => {
@@ -336,6 +345,31 @@ function coverHtml(url: string | undefined, cls: string, phText: string | undefi
   return ph + img;
 }
 
+/* ================= 状态模板（加载中 / 加载失败 / 找不到，全站统一） ================= */
+const LOADING_HTML = '<div class="empty">加载中…</div>';
+
+function mascotHtml(): string {
+  return '<img class="mascot" src="' + MASCOT + '" alt="">';
+}
+
+function loadFailHtml(e: unknown): string {
+  return (
+    '<div class="empty">' + mascotHtml() +
+      '节目库加载失败，请稍后重试' +
+      '<span class="empty-detail">' + escapeHtml((e as Error).message) + '</span>' +
+    '</div>'
+  );
+}
+
+function notFoundHtml(msg: string, detail?: string): string {
+  return (
+    '<div class="empty">' + mascotHtml() + escapeHtml(msg) +
+      (detail ? '<span class="empty-detail">' + escapeHtml(detail) + '</span>' : '') +
+      '<br><br><a class="tool-btn" href="#/">返回发现首页</a>' +
+    '</div>'
+  );
+}
+
 /* ================= 页面 1：发现首页 ================= */
 async function renderDiscover(): Promise<void> {
   cleanupEpisode();
@@ -344,21 +378,20 @@ async function renderDiscover(): Promise<void> {
   seoBase('Cherina Pod · 双语播客精听', SITE_DESC, SITE_URL + '/', SITE_URL + '/brand/web-logo-small.svg');
   container.className = 'container';
   app.className = '';
-  app.innerHTML = '<div class="empty">加载中…</div>';
+  app.innerHTML = LOADING_HTML;
 
   let data;
   try {
     data = await loadIndex();
   } catch (e) {
-    app.innerHTML = '<div class="empty">节目库加载失败：' + escapeHtml((e as Error).message) + '</div>';
+    app.innerHTML = loadFailHtml(e);
     return;
   }
   const items = data.items || [];
   if (!items.length) {
     app.innerHTML =
-      '<div class="empty">' +
-        '<img class="mascot" src="' + MASCOT + '" alt="">' +
-        '还没有节目<br>先在本地跑一期流水线吧' +
+      '<div class="empty">' + mascotHtml() +
+        '还没有节目，稍后再来看看' +
       '</div>';
     return;
   }
@@ -393,10 +426,10 @@ async function renderDiscover(): Promise<void> {
     return ts(b.generated_at || b.pub_date) - ts(a.generated_at || a.pub_date);
   }).slice(0, 14);
 
-  function railSection(title: string, sub: string, list: EpisodeItem[], extraCls?: string): string {
+  function railSection(title: string, sub: string, list: EpisodeItem[]): string {
     if (!list || !list.length) return '';
     return (
-      '<section class="section ' + (extraCls || '') + '">' +
+      '<section class="section">' +
         '<div class="section-head"><h2>' + escapeHtml(title) + '</h2>' +
           (sub ? '<span class="sub">' + escapeHtml(sub) + '</span>' : '') + '</div>' +
         '<div class="rail-scroll">' + list.map(miniCardHtml).join('') + '</div>' +
@@ -407,7 +440,7 @@ async function renderDiscover(): Promise<void> {
   let catHtml = '';
   for (const cat of CAT_ORDER) {
     if (catBuckets[cat] && catBuckets[cat].length) {
-      catHtml += railSection(cat, '', catBuckets[cat], 'cat-rail');
+      catHtml += railSection(cat, '', catBuckets[cat]);
     }
   }
 
@@ -421,7 +454,7 @@ async function renderDiscover(): Promise<void> {
   let continueHtml = '';
   if (continuing.length) {
     continueHtml =
-      '<section class="section continue-section">' +
+      '<section class="section">' +
         '<div class="section-head"><h2>继续听</h2><span class="sub">上次听到这</span></div>' +
         '<div class="rail-scroll">' + continuing.map(x => continueCardHtml(x.it, x.prefs)).join('') + '</div>' +
       '</section>';
@@ -541,7 +574,7 @@ function renderSentenceHits(query: string, rows: SearchResult[] | null | undefin
   const empty = results.querySelector('.empty');
   if (!rows || !rows.length) {
     if (empty && !results.querySelector('.section')) {
-      empty.innerHTML = '<img class="mascot" src="' + MASCOT + '" alt="">没有匹配「' + escapeHtml(query) + '」的内容';
+      empty.innerHTML = mascotHtml() + '没有匹配「' + escapeHtml(query) + '」的内容';
     }
     return;
   }
@@ -552,19 +585,7 @@ function renderSentenceHits(query: string, rows: SearchResult[] | null | undefin
     '<div class="section-head"><h2>句子命中</h2><span class="count">' + rows.length + '</span></div>' +
     '<div class="ep-rows">' + rows.map(sentenceRowHtml).join('') + '</div>';
   results.prepend(sec);
-  bindNav(sec);
-  // 覆盖 bindNav 默认跳转：记录 seek 目标
-  sec.querySelectorAll<HTMLElement>('[data-seek]').forEach(el => {
-    el.addEventListener('click', () => {
-      const go = el.dataset.go;
-      const seek = el.dataset.seek;
-      if (!go || seek == null) return;
-      const id = go.split(':')[1];
-      pendingSeek = { id: decodeURIComponent(id), t: +seek };
-      navStack.push(location.hash || '#/');
-      location.hash = go;
-    });
-  });
+  bindNav(sec); // data-seek 由 bindNav 统一处理
 }
 
 /* 句子搜索：英文走 FTS5、中文走 LIKE，D1 不可用时静默降级 */
@@ -617,10 +638,9 @@ function drawDiscoverSearch(query: string, channels: Channel[], items: EpisodeIt
 
   if (!chanHits.length && !epHits.length) {
     results.innerHTML =
-      '<div class="empty">' +
-        '<img class="mascot" src="' + MASCOT + '" alt="">' +
-        '标题没有匹配「' + escapeHtml(query) + '」<br>' +
-        '<span style="opacity:.6">正在检索双语逐句…</span>' +
+      '<div class="empty">' + mascotHtml() +
+        '标题没有匹配「' + escapeHtml(query) + '」' +
+        '<span class="empty-detail">正在检索双语逐句…</span>' +
       '</div>';
     return;
   }
@@ -652,13 +672,13 @@ async function renderPodcast(key: string): Promise<void> {
   document.title = key + ' · Cherina Pod';
   container.className = 'container';
   app.className = '';
-  app.innerHTML = '<div class="empty">加载中…</div>';
+  app.innerHTML = LOADING_HTML;
 
   let data;
   try {
     data = await loadIndex();
   } catch (e) {
-    app.innerHTML = '<div class="empty">节目库加载失败：' + escapeHtml((e as Error).message) + '</div>';
+    app.innerHTML = loadFailHtml(e);
     return;
   }
   const eps = (data.items || [])
@@ -667,21 +687,17 @@ async function renderPodcast(key: string): Promise<void> {
 
   if (!eps.length) {
     app.innerHTML =
-      '<a class="back-link" href="#/" title="返回发现" aria-label="返回发现"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></a>' +
-      '<div class="empty">' +
-        '<img class="mascot" src="' + MASCOT + '" alt="">' +
-        '没有找到这个频道<br><br>' +
-        '<button class="tool-btn" onclick="location.hash=\'#/\'">返回发现首页</button>' +
-      '</div>';
+      '<a class="back-link" href="#/" title="返回发现" aria-label="返回发现">' + BACK_SVG + '</a>' +
+      notFoundHtml('没有找到这个频道');
     return;
   }
 
   const g = groupChannels(eps)[0];
-  const latest = eps[0];
-  // SEO：频道页描述 + PodcastSeries 结构化数据
+  // SEO：频道级描述 + PodcastSeries 结构化数据
+  const chanDesc = g.name + ' 双语播客精听：共 ' + eps.length + ' 集，中英对照逐句学习。';
   seoBase(
     g.name + ' · Cherina Pod',
-    ((latest.description || '').slice(0, 150)) + ' — 中英对照逐句精听。',
+    chanDesc,
     SITE_URL + '/?podcast=' + encodeURIComponent(key),
     g.image || SITE_URL + '/brand/web-logo-small.svg'
   );
@@ -690,22 +706,18 @@ async function renderPodcast(key: string): Promise<void> {
     '@type': 'PodcastSeries',
     name: g.name,
     url: SITE_URL + '/?podcast=' + encodeURIComponent(key),
-    description: (latest.description || '').slice(0, 200),
+    description: chanDesc,
     ...(g.image ? { image: g.image } : {}),
   });
 
   app.innerHTML =
-    '<a class="back-link" href="#/" title="返回发现" aria-label="返回发现"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></a>' +
+    '<a class="back-link" href="#/" title="返回发现" aria-label="返回发现">' + BACK_SVG + '</a>' +
 
     '<div class="pod-hero">' +
       '<div class="pod-cover-wrap">' + coverHtml(g.image, '', g.name) + '</div>' +
       '<div class="pod-info">' +
         '<h1>' + escapeHtml(g.name) + '</h1>' +
         (g.author && g.author !== g.name && g.author !== g.zhAlt ? '<div class="author">' + escapeHtml(g.author) + '</div>' : '') +
-        (latest.description
-          ? '<div class="pod-desc clamped" id="podDesc">' + escapeHtml(latest.description) + '</div>' +
-            '<button class="desc-toggle" id="podDescToggle">展开</button>'
-          : '') +
         '<div class="pod-stats">' + eps.length + ' 集 · ' + g.pairs + ' 句</div>' +
       '</div>' +
     '</div>' +
@@ -715,16 +727,6 @@ async function renderPodcast(key: string): Promise<void> {
     '</div>';
 
   bindNav(app);
-
-  const toggle = $('#podDescToggle');
-  if (toggle) {
-    toggle.addEventListener('click', () => {
-      const desc = $('#podDesc');
-      if (!desc) return;
-      const clamped = desc.classList.toggle('clamped');
-      toggle.textContent = clamped ? '展开' : '收起';
-    });
-  }
 }
 
 /* 单集行（频道页 / 搜索结果共用） */
@@ -734,7 +736,7 @@ function epRowHtml(it: EpisodeItem, num: number, showPodcast: boolean): string {
   const metaParts: string[] = [];
   if (showPodcast) metaParts.push(it.podcast_title || it.podcast_title_zh || '');
   if (it.pub_date) metaParts.push(it.pub_date);
-  if (it.duration) metaParts.push(it.duration);
+  if (it.duration) metaParts.push(fmtDuration(it.duration)); // RSS 原始时长格式不一（秒 / 00:mm:ss），统一格式化
   if (it.pairs_count) metaParts.push(it.pairs_count + ' 句');
 
   // 收听进度（localStorage 记忆）
@@ -867,19 +869,14 @@ async function renderEpisode(id: string): Promise<void> {
   document.title = '加载中… · Cherina Pod';
   container.className = 'container has-playbar';
   app.className = '';
-  app.innerHTML = '<div class="empty">正在加载单期内容…</div>';
+  app.innerHTML = LOADING_HTML;
   let data: EpisodeDetail;
   try {
     const resp = await fetch('/api/episodes/' + encodeURIComponent(id), { cache: 'no-store' });
     if (!resp.ok) throw new Error('HTTP ' + resp.status);
     data = await resp.json();
   } catch (e) {
-    app.innerHTML =
-      '<div class="empty">' +
-        '<img class="mascot" src="' + MASCOT + '" alt="">' +
-        '找不到这期节目（' + escapeHtml((e as Error).message) + '）<br><br>' +
-        '<button class="tool-btn" onclick="location.hash=\'#/\'">返回发现首页</button>' +
-      '</div>';
+    app.innerHTML = notFoundHtml('找不到这期节目', (e as Error).message);
     return;
   }
 
@@ -962,7 +959,7 @@ async function renderEpisode(id: string): Promise<void> {
           : '') +
         '<div class="toolbar">' +
           '<a class="back-link" href="' + backHash + '" title="返回" aria-label="返回" id="epBackLink">' +
-            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>' +
+            BACK_SVG +
           '</a>' +
           '<div class="spacer"></div>' +
           '<button class="tbtn" id="modeBtn" title="字幕：' + MODE_LABELS[ep.mode] + '（点击切换）" aria-label="字幕模式：' + MODE_LABELS[ep.mode] + '">' +
@@ -1000,12 +997,12 @@ async function renderEpisode(id: string): Promise<void> {
 
         '<div class="list" id="list">' +
           (ep.pairs.length === 0
-            ? '<div class="empty"><img class="mascot" src="' + MASCOT + '" alt="">这期还没有句子数据</div>'
+            ? '<div class="empty">' + mascotHtml() + '这期还没有句子数据</div>'
             : ep.pairs.map((p, i) =>
                 '<div class="pair" data-i="' + i + '">' +
                   '<div class="pair-actions">' +
                     '<button class="pa-btn" data-act="loop" title="循环此句" aria-label="循环此句">' +
-                      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 2l4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/><path d="M11 10h1v4"/></svg>' +
+                      LOOP_SVG +
                     '</button>' +
                     '<button class="pa-btn" data-act="copy" title="复制英文" aria-label="复制英文">' +
                       '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>' +
@@ -1044,7 +1041,7 @@ async function renderEpisode(id: string): Promise<void> {
         '<div class="times"><span class="cur" id="curTime">0:00</span> / <span id="durTime">' + escapeHtml(fmtTime(data.duration || parseDuration(info.duration))) + '</span></div>' +
         '<div class="spacer"></div>' +
         '<button class="p-btn" id="loopBtn" title="单句循环：循环当前句，练跟读（L）">' +
-          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 2l4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/><path d="M11 10h1v4"/></svg>' +
+          LOOP_SVG +
         '</button>' +
         '<button class="speed-btn' + (ep.rate === 1 ? ' is-one' : '') + '" id="speedBtn" title="点击切换倍速">' + ep.rate + '×</button>' +
         '<div class="vol-wrap">' +
@@ -1523,8 +1520,7 @@ window.addEventListener('beforeinstallprompt', ((e: BeforeInstallPromptEvent) =>
 installBtn.addEventListener('click', async () => {
   if (!deferredPrompt) return;
   deferredPrompt.prompt();
-  const { outcome } = await deferredPrompt.userChoice;
-  if (outcome === 'accepted') toast('已安装到主屏幕');
+  await deferredPrompt.userChoice; // 接受后会触发 appinstalled，toast 在那里统一弹
   deferredPrompt = null;
   installBtn.hidden = true;
 });

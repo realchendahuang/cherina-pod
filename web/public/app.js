@@ -66,11 +66,13 @@
     ta.remove();
   }
   var CHEV_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>';
+  var BACK_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>';
+  var LOOP_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 2l4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/><path d="M11 10h1v4"/></svg>';
   var THEME_KEY = "cherina:theme";
   function applyTheme(t) {
     document.documentElement.dataset.theme = t;
     const meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.content = t === "dark" ? "#121110" : "#fbfaf8";
+    if (meta) meta.content = t === "dark" ? "#141211" : "#f7f6f3";
   }
   function initTheme() {
     const saved = localStorage.getItem(THEME_KEY);
@@ -188,7 +190,6 @@
     }
   }
   window.addEventListener("hashchange", route);
-  window.addEventListener("popstate", route);
   function bindNav(root) {
     root.querySelectorAll("[data-go]").forEach((el) => {
       const open = () => {
@@ -199,10 +200,14 @@
         const payload = v.slice(i + 1);
         if (type === "ext") {
           window.open(payload, "_blank", "noopener");
-        } else {
-          navStack.push(location.hash || "#/");
-          location.hash = "#/" + type + "/" + payload;
+          return;
         }
+        const seek = el.dataset.seek;
+        if (type === "ep" && seek != null) {
+          pendingSeek = { id: decodeURIComponent(payload), t: +seek };
+        }
+        navStack.push(location.hash || "#/");
+        location.hash = "#/" + type + "/" + payload;
       };
       el.addEventListener("click", open);
       el.addEventListener("keydown", (e) => {
@@ -218,6 +223,16 @@
     const img = url ? '<img class="' + cls + '" src="' + escapeHtml(url) + `" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display='none'">` : "";
     return ph + img;
   }
+  var LOADING_HTML = '<div class="empty">\u52A0\u8F7D\u4E2D\u2026</div>';
+  function mascotHtml() {
+    return '<img class="mascot" src="' + MASCOT + '" alt="">';
+  }
+  function loadFailHtml(e) {
+    return '<div class="empty">' + mascotHtml() + '\u8282\u76EE\u5E93\u52A0\u8F7D\u5931\u8D25\uFF0C\u8BF7\u7A0D\u540E\u91CD\u8BD5<span class="empty-detail">' + escapeHtml(e.message) + "</span></div>";
+  }
+  function notFoundHtml(msg, detail) {
+    return '<div class="empty">' + mascotHtml() + escapeHtml(msg) + (detail ? '<span class="empty-detail">' + escapeHtml(detail) + "</span>" : "") + '<br><br><a class="tool-btn" href="#/">\u8FD4\u56DE\u53D1\u73B0\u9996\u9875</a></div>';
+  }
   async function renderDiscover() {
     cleanupEpisode();
     currentView.name = "discover";
@@ -225,17 +240,17 @@
     seoBase("Cherina Pod \xB7 \u53CC\u8BED\u64AD\u5BA2\u7CBE\u542C", SITE_DESC, SITE_URL + "/", SITE_URL + "/brand/web-logo-small.svg");
     container.className = "container";
     app.className = "";
-    app.innerHTML = '<div class="empty">\u52A0\u8F7D\u4E2D\u2026</div>';
+    app.innerHTML = LOADING_HTML;
     let data;
     try {
       data = await loadIndex();
     } catch (e) {
-      app.innerHTML = '<div class="empty">\u8282\u76EE\u5E93\u52A0\u8F7D\u5931\u8D25\uFF1A' + escapeHtml(e.message) + "</div>";
+      app.innerHTML = loadFailHtml(e);
       return;
     }
     const items = data.items || [];
     if (!items.length) {
-      app.innerHTML = '<div class="empty"><img class="mascot" src="' + MASCOT + '" alt="">\u8FD8\u6CA1\u6709\u8282\u76EE<br>\u5148\u5728\u672C\u5730\u8DD1\u4E00\u671F\u6D41\u6C34\u7EBF\u5427</div>';
+      app.innerHTML = '<div class="empty">' + mascotHtml() + "\u8FD8\u6CA1\u6709\u8282\u76EE\uFF0C\u7A0D\u540E\u518D\u6765\u770B\u770B</div>";
       return;
     }
     const channels = groupChannels(items);
@@ -263,20 +278,20 @@
     const latest = items.slice().sort((a, b) => {
       return ts(b.generated_at || b.pub_date) - ts(a.generated_at || a.pub_date);
     }).slice(0, 14);
-    function railSection(title, sub, list, extraCls) {
+    function railSection(title, sub, list) {
       if (!list || !list.length) return "";
-      return '<section class="section ' + (extraCls || "") + '"><div class="section-head"><h2>' + escapeHtml(title) + "</h2>" + (sub ? '<span class="sub">' + escapeHtml(sub) + "</span>" : "") + '</div><div class="rail-scroll">' + list.map(miniCardHtml).join("") + "</div></section>";
+      return '<section class="section"><div class="section-head"><h2>' + escapeHtml(title) + "</h2>" + (sub ? '<span class="sub">' + escapeHtml(sub) + "</span>" : "") + '</div><div class="rail-scroll">' + list.map(miniCardHtml).join("") + "</div></section>";
     }
     let catHtml = "";
     for (const cat of CAT_ORDER) {
       if (catBuckets[cat] && catBuckets[cat].length) {
-        catHtml += railSection(cat, "", catBuckets[cat], "cat-rail");
+        catHtml += railSection(cat, "", catBuckets[cat]);
       }
     }
     const continuing = items.map((it) => ({ it, prefs: loadEpPrefs(it.id) })).filter((x) => x.prefs != null && typeof x.prefs.t === "number" && x.prefs.t > 0).sort((a, b) => (b.prefs.ts || 0) - (a.prefs.ts || 0)).slice(0, 4);
     let continueHtml = "";
     if (continuing.length) {
-      continueHtml = '<section class="section continue-section"><div class="section-head"><h2>\u7EE7\u7EED\u542C</h2><span class="sub">\u4E0A\u6B21\u542C\u5230\u8FD9</span></div><div class="rail-scroll">' + continuing.map((x) => continueCardHtml(x.it, x.prefs)).join("") + "</div></section>";
+      continueHtml = '<section class="section"><div class="section-head"><h2>\u7EE7\u7EED\u542C</h2><span class="sub">\u4E0A\u6B21\u542C\u5230\u8FD9</span></div><div class="rail-scroll">' + continuing.map((x) => continueCardHtml(x.it, x.prefs)).join("") + "</div></section>";
     }
     app.innerHTML = '<div class="search-wrap"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><input class="search-input" id="searchInput" type="search" placeholder="\u641C\u7D22\u8282\u76EE\u3001\u64AD\u5BA2\u6216\u53E5\u5B50\u2026" autocomplete="off"></div><div id="discoverMain">' + continueHtml + catHtml + '<section class="section"><div class="section-head"><h2>\u6700\u65B0\u66F4\u65B0</h2></div><div class="rail-scroll">' + latest.map(miniCardHtml).join("") + '</div></section><section class="section"><div class="section-head"><h2>\u5168\u90E8\u9891\u9053</h2></div><div class="chan-grid">' + channels.map(chanCardHtml).join("") + '</div></section></div><div id="searchResults" hidden></div>';
     bindNav(app);
@@ -317,7 +332,7 @@
     const empty = results.querySelector(".empty");
     if (!rows || !rows.length) {
       if (empty && !results.querySelector(".section")) {
-        empty.innerHTML = '<img class="mascot" src="' + MASCOT + '" alt="">\u6CA1\u6709\u5339\u914D\u300C' + escapeHtml(query) + "\u300D\u7684\u5185\u5BB9";
+        empty.innerHTML = mascotHtml() + "\u6CA1\u6709\u5339\u914D\u300C" + escapeHtml(query) + "\u300D\u7684\u5185\u5BB9";
       }
       return;
     }
@@ -327,17 +342,6 @@
     sec.innerHTML = '<div class="section-head"><h2>\u53E5\u5B50\u547D\u4E2D</h2><span class="count">' + rows.length + '</span></div><div class="ep-rows">' + rows.map(sentenceRowHtml).join("") + "</div>";
     results.prepend(sec);
     bindNav(sec);
-    sec.querySelectorAll("[data-seek]").forEach((el) => {
-      el.addEventListener("click", () => {
-        const go = el.dataset.go;
-        const seek = el.dataset.seek;
-        if (!go || seek == null) return;
-        const id = go.split(":")[1];
-        pendingSeek = { id: decodeURIComponent(id), t: +seek };
-        navStack.push(location.hash || "#/");
-        location.hash = go;
-      });
-    });
   }
   var sentenceSearchTimer = null;
   var sentenceSearchSeq = 0;
@@ -380,7 +384,7 @@
     const chanHits = channels.filter((g) => g.name.toLowerCase().includes(query) || g.zhAlt.toLowerCase().includes(query) || (g.author || "").toLowerCase().includes(query));
     const epHits = items.filter((it) => (it.episode_title || "").toLowerCase().includes(query) || (it.episode_title_zh || "").toLowerCase().includes(query) || (it.podcast_title || "").toLowerCase().includes(query) || (it.podcast_title_zh || "").toLowerCase().includes(query) || (it.podcast_author || "").toLowerCase().includes(query));
     if (!chanHits.length && !epHits.length) {
-      results.innerHTML = '<div class="empty"><img class="mascot" src="' + MASCOT + '" alt="">\u6807\u9898\u6CA1\u6709\u5339\u914D\u300C' + escapeHtml(query) + '\u300D<br><span style="opacity:.6">\u6B63\u5728\u68C0\u7D22\u53CC\u8BED\u9010\u53E5\u2026</span></div>';
+      results.innerHTML = '<div class="empty">' + mascotHtml() + "\u6807\u9898\u6CA1\u6709\u5339\u914D\u300C" + escapeHtml(query) + '\u300D<span class="empty-detail">\u6B63\u5728\u68C0\u7D22\u53CC\u8BED\u9010\u53E5\u2026</span></div>';
       return;
     }
     let html = "";
@@ -400,24 +404,24 @@
     document.title = key + " \xB7 Cherina Pod";
     container.className = "container";
     app.className = "";
-    app.innerHTML = '<div class="empty">\u52A0\u8F7D\u4E2D\u2026</div>';
+    app.innerHTML = LOADING_HTML;
     let data;
     try {
       data = await loadIndex();
     } catch (e) {
-      app.innerHTML = '<div class="empty">\u8282\u76EE\u5E93\u52A0\u8F7D\u5931\u8D25\uFF1A' + escapeHtml(e.message) + "</div>";
+      app.innerHTML = loadFailHtml(e);
       return;
     }
     const eps = (data.items || []).filter((it) => (it.podcast_title || it.podcast_title_zh || "\u672A\u547D\u540D\u64AD\u5BA2") === key).sort((a, b) => String(b.pub_date || "").localeCompare(String(a.pub_date || "")));
     if (!eps.length) {
-      app.innerHTML = '<a class="back-link" href="#/" title="\u8FD4\u56DE\u53D1\u73B0" aria-label="\u8FD4\u56DE\u53D1\u73B0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></a><div class="empty"><img class="mascot" src="' + MASCOT + `" alt="">\u6CA1\u6709\u627E\u5230\u8FD9\u4E2A\u9891\u9053<br><br><button class="tool-btn" onclick="location.hash='#/'">\u8FD4\u56DE\u53D1\u73B0\u9996\u9875</button></div>`;
+      app.innerHTML = '<a class="back-link" href="#/" title="\u8FD4\u56DE\u53D1\u73B0" aria-label="\u8FD4\u56DE\u53D1\u73B0">' + BACK_SVG + "</a>" + notFoundHtml("\u6CA1\u6709\u627E\u5230\u8FD9\u4E2A\u9891\u9053");
       return;
     }
     const g = groupChannels(eps)[0];
-    const latest = eps[0];
+    const chanDesc = g.name + " \u53CC\u8BED\u64AD\u5BA2\u7CBE\u542C\uFF1A\u5171 " + eps.length + " \u96C6\uFF0C\u4E2D\u82F1\u5BF9\u7167\u9010\u53E5\u5B66\u4E60\u3002";
     seoBase(
       g.name + " \xB7 Cherina Pod",
-      (latest.description || "").slice(0, 150) + " \u2014 \u4E2D\u82F1\u5BF9\u7167\u9010\u53E5\u7CBE\u542C\u3002",
+      chanDesc,
       SITE_URL + "/?podcast=" + encodeURIComponent(key),
       g.image || SITE_URL + "/brand/web-logo-small.svg"
     );
@@ -426,27 +430,18 @@
       "@type": "PodcastSeries",
       name: g.name,
       url: SITE_URL + "/?podcast=" + encodeURIComponent(key),
-      description: (latest.description || "").slice(0, 200),
+      description: chanDesc,
       ...g.image ? { image: g.image } : {}
     });
-    app.innerHTML = '<a class="back-link" href="#/" title="\u8FD4\u56DE\u53D1\u73B0" aria-label="\u8FD4\u56DE\u53D1\u73B0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></a><div class="pod-hero"><div class="pod-cover-wrap">' + coverHtml(g.image, "", g.name) + '</div><div class="pod-info"><h1>' + escapeHtml(g.name) + "</h1>" + (g.author && g.author !== g.name && g.author !== g.zhAlt ? '<div class="author">' + escapeHtml(g.author) + "</div>" : "") + (latest.description ? '<div class="pod-desc clamped" id="podDesc">' + escapeHtml(latest.description) + '</div><button class="desc-toggle" id="podDescToggle">\u5C55\u5F00</button>' : "") + '<div class="pod-stats">' + eps.length + " \u96C6 \xB7 " + g.pairs + ' \u53E5</div></div></div><div class="ep-rows">' + eps.map((it, i) => epRowHtml(it, i + 1, false)).join("") + "</div>";
+    app.innerHTML = '<a class="back-link" href="#/" title="\u8FD4\u56DE\u53D1\u73B0" aria-label="\u8FD4\u56DE\u53D1\u73B0">' + BACK_SVG + '</a><div class="pod-hero"><div class="pod-cover-wrap">' + coverHtml(g.image, "", g.name) + '</div><div class="pod-info"><h1>' + escapeHtml(g.name) + "</h1>" + (g.author && g.author !== g.name && g.author !== g.zhAlt ? '<div class="author">' + escapeHtml(g.author) + "</div>" : "") + '<div class="pod-stats">' + eps.length + " \u96C6 \xB7 " + g.pairs + ' \u53E5</div></div></div><div class="ep-rows">' + eps.map((it, i) => epRowHtml(it, i + 1, false)).join("") + "</div>";
     bindNav(app);
-    const toggle = $("#podDescToggle");
-    if (toggle) {
-      toggle.addEventListener("click", () => {
-        const desc = $("#podDesc");
-        if (!desc) return;
-        const clamped = desc.classList.toggle("clamped");
-        toggle.textContent = clamped ? "\u5C55\u5F00" : "\u6536\u8D77";
-      });
-    }
   }
   function epRowHtml(it, num, showPodcast) {
     const main = it.episode_title_zh || it.episode_title || "";
     const metaParts = [];
     if (showPodcast) metaParts.push(it.podcast_title || it.podcast_title_zh || "");
     if (it.pub_date) metaParts.push(it.pub_date);
-    if (it.duration) metaParts.push(it.duration);
+    if (it.duration) metaParts.push(fmtDuration(it.duration));
     if (it.pairs_count) metaParts.push(it.pairs_count + " \u53E5");
     let heardHtml = "";
     const prefs = loadEpPrefs(it.id);
@@ -542,14 +537,14 @@
     document.title = "\u52A0\u8F7D\u4E2D\u2026 \xB7 Cherina Pod";
     container.className = "container has-playbar";
     app.className = "";
-    app.innerHTML = '<div class="empty">\u6B63\u5728\u52A0\u8F7D\u5355\u671F\u5185\u5BB9\u2026</div>';
+    app.innerHTML = LOADING_HTML;
     let data;
     try {
       const resp = await fetch("/api/episodes/" + encodeURIComponent(id), { cache: "no-store" });
       if (!resp.ok) throw new Error("HTTP " + resp.status);
       data = await resp.json();
     } catch (e) {
-      app.innerHTML = '<div class="empty"><img class="mascot" src="' + MASCOT + '" alt="">\u627E\u4E0D\u5230\u8FD9\u671F\u8282\u76EE\uFF08' + escapeHtml(e.message) + `\uFF09<br><br><button class="tool-btn" onclick="location.hash='#/'">\u8FD4\u56DE\u53D1\u73B0\u9996\u9875</button></div>`;
+      app.innerHTML = notFoundHtml("\u627E\u4E0D\u5230\u8FD9\u671F\u8282\u76EE", e.message);
       return;
     }
     const info = data.episode || {};
@@ -596,9 +591,9 @@
     const backHash = "#/podcast/" + encodeURIComponent(pcName);
     const descText = (info.description || "").trim();
     app.innerHTML = '<div class="ep-layout"><div class="ep-main"><div class="ep-hero"><div class="ep-hero-cover">' + coverHtml(info.image || pc.image, "cover", pcName) + '</div><div class="ep-head"><div class="pc-name">' + escapeHtml(pcName) + "</div><h1>" + escapeHtml(mainTitle) + '</h1><div class="meta">' + [info.pub_date, fmtDuration(info.duration)].filter(Boolean).map(escapeHtml).join(" \xB7 ") + "</div></div></div>" + /* 单集简介：主列头部，meta 之下、工具条之上，默认 2 行折叠 */
-    (descText ? '<div class="ep-desc-wrap"><div class="ep-desc clamped">' + escapeHtml(descText) + '</div><button class="desc-toggle">\u5C55\u5F00</button></div>' : "") + '<div class="toolbar"><a class="back-link" href="' + backHash + '" title="\u8FD4\u56DE" aria-label="\u8FD4\u56DE" id="epBackLink"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></a><div class="spacer"></div><button class="tbtn" id="modeBtn" title="\u5B57\u5E55\uFF1A' + MODE_LABELS[ep.mode] + '\uFF08\u70B9\u51FB\u5207\u6362\uFF09" aria-label="\u5B57\u5E55\u6A21\u5F0F\uFF1A' + MODE_LABELS[ep.mode] + '"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 8l6 6"/><path d="M4 14l6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="M22 22l-5-10-5 10"/><path d="M14 18h6"/></svg></button><div class="settings-wrap"><button class="tbtn" id="settingsBtn" title="\u5B66\u4E60\u8BBE\u7F6E" aria-label="\u5B66\u4E60\u8BBE\u7F6E" aria-haspopup="true" aria-expanded="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h9M18 6h3M3 12h3M12 12h9M3 18h11M20 18h1"/><circle cx="15" cy="6" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="18" r="2"/></svg></button><div class="settings-pop" id="settingsPop" hidden><div class="set-row"><span class="set-label">\u8DDF\u968F\u5F53\u524D\u53E5</span><span class="set-hint">F</span><button class="switch' + (ep.follow ? " on" : "") + '" id="followBtn" role="switch" aria-checked="' + (ep.follow ? "true" : "false") + '" title="\u8DDF\u968F\u5F53\u524D\u53E5\uFF08F\uFF09" aria-label="\u8DDF\u968F\u5F53\u524D\u53E5"></button></div><div class="set-row"><span class="set-label">\u5B57\u53F7</span><div class="set-stepper"><button class="tbtn" id="fontMinus" title="\u51CF\u5C0F\u5B57\u53F7" aria-label="\u51CF\u5C0F\u5B57\u53F7"><svg viewBox="0 0 24 24" fill="none"><text x="3" y="17" font-size="14" font-weight="800" fill="currentColor" font-family="inherit">A</text><path d="M14 13h7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button><span class="set-val" id="fontVal">' + +ep.fontScale.toFixed(2) + '</span><button class="tbtn" id="fontPlus" title="\u589E\u5927\u5B57\u53F7" aria-label="\u589E\u5927\u5B57\u53F7"><svg viewBox="0 0 24 24" fill="none"><text x="3" y="17" font-size="14" font-weight="800" fill="currentColor" font-family="inherit">A</text><path d="M14 13h7M17.5 9.5v7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button></div></div><button class="set-link" id="helpBtn" title="\u952E\u76D8\u5FEB\u6377\u952E\uFF08?\uFF09"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M6 14h.01M18 14h.01M9 14h6"/></svg>\u952E\u76D8\u5FEB\u6377\u952E<span class="set-hint">?</span></button></div></div></div><div class="list" id="list">' + (ep.pairs.length === 0 ? '<div class="empty"><img class="mascot" src="' + MASCOT + '" alt="">\u8FD9\u671F\u8FD8\u6CA1\u6709\u53E5\u5B50\u6570\u636E</div>' : ep.pairs.map(
-      (p, i) => '<div class="pair" data-i="' + i + '"><div class="pair-actions"><button class="pa-btn" data-act="loop" title="\u5FAA\u73AF\u6B64\u53E5" aria-label="\u5FAA\u73AF\u6B64\u53E5"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 2l4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/><path d="M11 10h1v4"/></svg></button><button class="pa-btn" data-act="copy" title="\u590D\u5236\u82F1\u6587" aria-label="\u590D\u5236\u82F1\u6587"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button></div><span class="time">' + fmtTime(p.start) + '</span><div class="en">' + escapeHtml(p.en) + '</div><div class="zh">' + escapeHtml(p.zh) + "</div></div>"
-    ).join("")) + '</div></div></div><div class="playbar" id="playbar"><div class="pbar-hit" id="pbarHit" title="\u70B9\u51FB\u6216\u62D6\u62FD\u8DF3\u8F6C"><div class="pbar"><div class="pbar-fill" id="pbarFill"></div></div></div><div class="playbar-row"><div class="pb-cover-wrap">' + coverHtml(info.image || pc.image, "pb-cover", pcName) + '</div><div class="pb-now"><div class="np-line" id="npLine">' + escapeHtml(mainTitle) + '</div><div class="np-sub">' + escapeHtml(pcName) + '</div></div><button class="p-btn" id="back10" title="\u540E\u9000 10 \u79D2"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 17l-5-5 5-5"/><path d="M18 17l-5-5 5-5"/></svg></button><button class="p-btn main" id="playBtn" title="\u64AD\u653E / \u6682\u505C\uFF08\u7A7A\u683C\uFF09"><svg id="playIcon" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l11-6.5z"/></svg></button><button class="p-btn" id="fwd10" title="\u524D\u8FDB 10 \u79D2"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 17l5-5-5-5"/><path d="M6 17l5-5-5-5"/></svg></button><div class="times"><span class="cur" id="curTime">0:00</span> / <span id="durTime">' + escapeHtml(fmtTime(data.duration || parseDuration(info.duration))) + '</span></div><div class="spacer"></div><button class="p-btn" id="loopBtn" title="\u5355\u53E5\u5FAA\u73AF\uFF1A\u5FAA\u73AF\u5F53\u524D\u53E5\uFF0C\u7EC3\u8DDF\u8BFB\uFF08L\uFF09"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 2l4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/><path d="M11 10h1v4"/></svg></button><button class="speed-btn' + (ep.rate === 1 ? " is-one" : "") + '" id="speedBtn" title="\u70B9\u51FB\u5207\u6362\u500D\u901F">' + ep.rate + '\xD7</button><div class="vol-wrap"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 5.5a9 9 0 0 1 0 13"/></svg><input class="vol-range" id="volRange" type="range" min="0" max="1" step="0.05" value="1" title="\u97F3\u91CF"></div></div></div>';
+    (descText ? '<div class="ep-desc-wrap"><div class="ep-desc clamped">' + escapeHtml(descText) + '</div><button class="desc-toggle">\u5C55\u5F00</button></div>' : "") + '<div class="toolbar"><a class="back-link" href="' + backHash + '" title="\u8FD4\u56DE" aria-label="\u8FD4\u56DE" id="epBackLink">' + BACK_SVG + '</a><div class="spacer"></div><button class="tbtn" id="modeBtn" title="\u5B57\u5E55\uFF1A' + MODE_LABELS[ep.mode] + '\uFF08\u70B9\u51FB\u5207\u6362\uFF09" aria-label="\u5B57\u5E55\u6A21\u5F0F\uFF1A' + MODE_LABELS[ep.mode] + '"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 8l6 6"/><path d="M4 14l6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="M22 22l-5-10-5 10"/><path d="M14 18h6"/></svg></button><div class="settings-wrap"><button class="tbtn" id="settingsBtn" title="\u5B66\u4E60\u8BBE\u7F6E" aria-label="\u5B66\u4E60\u8BBE\u7F6E" aria-haspopup="true" aria-expanded="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h9M18 6h3M3 12h3M12 12h9M3 18h11M20 18h1"/><circle cx="15" cy="6" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="18" r="2"/></svg></button><div class="settings-pop" id="settingsPop" hidden><div class="set-row"><span class="set-label">\u8DDF\u968F\u5F53\u524D\u53E5</span><span class="set-hint">F</span><button class="switch' + (ep.follow ? " on" : "") + '" id="followBtn" role="switch" aria-checked="' + (ep.follow ? "true" : "false") + '" title="\u8DDF\u968F\u5F53\u524D\u53E5\uFF08F\uFF09" aria-label="\u8DDF\u968F\u5F53\u524D\u53E5"></button></div><div class="set-row"><span class="set-label">\u5B57\u53F7</span><div class="set-stepper"><button class="tbtn" id="fontMinus" title="\u51CF\u5C0F\u5B57\u53F7" aria-label="\u51CF\u5C0F\u5B57\u53F7"><svg viewBox="0 0 24 24" fill="none"><text x="3" y="17" font-size="14" font-weight="800" fill="currentColor" font-family="inherit">A</text><path d="M14 13h7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button><span class="set-val" id="fontVal">' + +ep.fontScale.toFixed(2) + '</span><button class="tbtn" id="fontPlus" title="\u589E\u5927\u5B57\u53F7" aria-label="\u589E\u5927\u5B57\u53F7"><svg viewBox="0 0 24 24" fill="none"><text x="3" y="17" font-size="14" font-weight="800" fill="currentColor" font-family="inherit">A</text><path d="M14 13h7M17.5 9.5v7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button></div></div><button class="set-link" id="helpBtn" title="\u952E\u76D8\u5FEB\u6377\u952E\uFF08?\uFF09"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M6 14h.01M18 14h.01M9 14h6"/></svg>\u952E\u76D8\u5FEB\u6377\u952E<span class="set-hint">?</span></button></div></div></div><div class="list" id="list">' + (ep.pairs.length === 0 ? '<div class="empty">' + mascotHtml() + "\u8FD9\u671F\u8FD8\u6CA1\u6709\u53E5\u5B50\u6570\u636E</div>" : ep.pairs.map(
+      (p, i) => '<div class="pair" data-i="' + i + '"><div class="pair-actions"><button class="pa-btn" data-act="loop" title="\u5FAA\u73AF\u6B64\u53E5" aria-label="\u5FAA\u73AF\u6B64\u53E5">' + LOOP_SVG + '</button><button class="pa-btn" data-act="copy" title="\u590D\u5236\u82F1\u6587" aria-label="\u590D\u5236\u82F1\u6587"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button></div><span class="time">' + fmtTime(p.start) + '</span><div class="en">' + escapeHtml(p.en) + '</div><div class="zh">' + escapeHtml(p.zh) + "</div></div>"
+    ).join("")) + '</div></div></div><div class="playbar" id="playbar"><div class="pbar-hit" id="pbarHit" title="\u70B9\u51FB\u6216\u62D6\u62FD\u8DF3\u8F6C"><div class="pbar"><div class="pbar-fill" id="pbarFill"></div></div></div><div class="playbar-row"><div class="pb-cover-wrap">' + coverHtml(info.image || pc.image, "pb-cover", pcName) + '</div><div class="pb-now"><div class="np-line" id="npLine">' + escapeHtml(mainTitle) + '</div><div class="np-sub">' + escapeHtml(pcName) + '</div></div><button class="p-btn" id="back10" title="\u540E\u9000 10 \u79D2"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 17l-5-5 5-5"/><path d="M18 17l-5-5 5-5"/></svg></button><button class="p-btn main" id="playBtn" title="\u64AD\u653E / \u6682\u505C\uFF08\u7A7A\u683C\uFF09"><svg id="playIcon" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l11-6.5z"/></svg></button><button class="p-btn" id="fwd10" title="\u524D\u8FDB 10 \u79D2"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 17l5-5-5-5"/><path d="M6 17l5-5-5-5"/></svg></button><div class="times"><span class="cur" id="curTime">0:00</span> / <span id="durTime">' + escapeHtml(fmtTime(data.duration || parseDuration(info.duration))) + '</span></div><div class="spacer"></div><button class="p-btn" id="loopBtn" title="\u5355\u53E5\u5FAA\u73AF\uFF1A\u5FAA\u73AF\u5F53\u524D\u53E5\uFF0C\u7EC3\u8DDF\u8BFB\uFF08L\uFF09">' + LOOP_SVG + '</button><button class="speed-btn' + (ep.rate === 1 ? " is-one" : "") + '" id="speedBtn" title="\u70B9\u51FB\u5207\u6362\u500D\u901F">' + ep.rate + '\xD7</button><div class="vol-wrap"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 5.5a9 9 0 0 1 0 13"/></svg><input class="vol-range" id="volRange" type="range" min="0" max="1" step="0.05" value="1" title="\u97F3\u91CF"></div></div></div>';
     if (ep.mode !== "both") app.classList.add("mode-" + ep.mode);
     document.documentElement.style.setProperty("--pair-scale", String(ep.fontScale));
     app.querySelectorAll(".desc-toggle").forEach((btn) => {
@@ -1036,8 +1031,7 @@
   installBtn.addEventListener("click", async () => {
     if (!deferredPrompt) return;
     deferredPrompt.prompt();
-    const { outcome } = await deferredPrompt.userChoice;
-    if (outcome === "accepted") toast("\u5DF2\u5B89\u88C5\u5230\u4E3B\u5C4F\u5E55");
+    await deferredPrompt.userChoice;
     deferredPrompt = null;
     installBtn.hidden = true;
   });

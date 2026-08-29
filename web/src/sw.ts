@@ -10,7 +10,7 @@
 
 const sw = self as unknown as ServiceWorkerGlobalScope;
 
-const CACHE_VERSION = 'cherina-v3';
+const CACHE_VERSION = 'cherina-v4';
 const PRECACHE_URLS = [
   './',
   './index.html',

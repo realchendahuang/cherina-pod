@@ -2,7 +2,7 @@
 (() => {
   // src/sw.ts
   var sw = self;
-  var CACHE_VERSION = "cherina-v3";
+  var CACHE_VERSION = "cherina-v4";
   var PRECACHE_URLS = [
     "./",
     "./index.html",
