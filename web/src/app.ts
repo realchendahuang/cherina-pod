@@ -158,6 +158,9 @@ const CHEV_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" str
 const BACK_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>';
 const LOOP_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 2l4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/><path d="M11 10h1v4"/></svg>';
 
+/* 精细指针（鼠标/触控板）才展示键盘快捷键相关入口 */
+const FINE_POINTER = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+
 /* ================= 主题（默认亮色，localStorage 记忆） ================= */
 const THEME_KEY = 'cherina:theme';
 function applyTheme(t: string): void {
@@ -769,7 +772,12 @@ function epRowHtml(it: EpisodeItem, num: number, showPodcast: boolean): string {
 /* ================= 页面 3：详情页（精听学习） ================= */
 const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 2];
 const MODE_ORDER = ['both', 'en', 'zh'];
-const MODE_LABELS: Record<string, string> = { both: '双语', en: '仅英文', zh: '仅中文' };
+
+/* 字幕分段控件按钮（初始 on 态按恢复的偏好渲染） */
+function segBtnHtml(m: string, label: string): string {
+  const on = ep.mode === m;
+  return '<button class="seg-btn' + (on ? ' on' : '') + '" data-mode="' + m + '" aria-pressed="' + on + '">' + label + '</button>';
+}
 
 // 当前单期会话状态（离开页面即弃）。
 // 播放器/工具条在 setupPlayer / setupToolbar 中回填这些回调；初始为 no-op，
@@ -794,6 +802,7 @@ interface EpisodeSession {
   setLoop: (on: boolean) => void;
   gotoSentence: (i: number, autoplay: boolean) => void;
   closeSettings: () => void;
+  closeSpeed: () => void;
 }
 
 const ep: EpisodeSession = {
@@ -816,6 +825,7 @@ const ep: EpisodeSession = {
   setLoop: () => {},
   gotoSentence: () => {},
   closeSettings: () => {},
+  closeSpeed: () => {},
 };
 
 // 跨期句子搜索命中后跳详情页自动定位到该句（id + 起始秒）
@@ -859,6 +869,7 @@ function cleanupEpisode(): void {
   ep.activeIdx = -1;
   ep.loop = false;
   ep.closeSettings = () => {};
+  ep.closeSpeed = () => {};
   ep.pairEls = [];
 }
 
@@ -961,10 +972,13 @@ async function renderEpisode(id: string): Promise<void> {
           '<a class="back-link" href="' + backHash + '" title="返回" aria-label="返回" id="epBackLink">' +
             BACK_SVG +
           '</a>' +
+          /* 字幕分段控件：当前模式直接可见，一键直达（替代原三态循环盲开关） */
+          '<div class="seg" role="group" aria-label="字幕显示">' +
+            segBtnHtml('both', '双语') +
+            segBtnHtml('en', '英') +
+            segBtnHtml('zh', '中') +
+          '</div>' +
           '<div class="spacer"></div>' +
-          '<button class="tbtn" id="modeBtn" title="字幕：' + MODE_LABELS[ep.mode] + '（点击切换）" aria-label="字幕模式：' + MODE_LABELS[ep.mode] + '">' +
-            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 8l6 6"/><path d="M4 14l6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="M22 22l-5-10-5 10"/><path d="M14 18h6"/></svg>' +
-          '</button>' +
           '<div class="settings-wrap">' +
             '<button class="tbtn" id="settingsBtn" title="学习设置" aria-label="学习设置" aria-haspopup="true" aria-expanded="false">' +
               '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h9M18 6h3M3 12h3M12 12h9M3 18h11M20 18h1"/><circle cx="15" cy="6" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="18" r="2"/></svg>' +
@@ -972,8 +986,8 @@ async function renderEpisode(id: string): Promise<void> {
             '<div class="settings-pop" id="settingsPop" hidden>' +
               '<div class="set-row">' +
                 '<span class="set-label">跟随当前句</span>' +
-                '<span class="set-hint">F</span>' +
-                '<button class="switch' + (ep.follow ? ' on' : '') + '" id="followBtn" role="switch" aria-checked="' + (ep.follow ? 'true' : 'false') + '" title="跟随当前句（F）" aria-label="跟随当前句"></button>' +
+                (FINE_POINTER ? '<span class="set-hint">F</span>' : '') +
+                '<button class="switch' + (ep.follow ? ' on' : '') + '" id="followBtn" role="switch" aria-checked="' + (ep.follow ? 'true' : 'false') + '" title="跟随当前句' + (FINE_POINTER ? '（F）' : '') + '" aria-label="跟随当前句"></button>' +
               '</div>' +
               '<div class="set-row">' +
                 '<span class="set-label">字号</span>' +
@@ -987,10 +1001,12 @@ async function renderEpisode(id: string): Promise<void> {
                   '</button>' +
                 '</div>' +
               '</div>' +
-              '<button class="set-link" id="helpBtn" title="键盘快捷键（?）">' +
-                '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M6 14h.01M18 14h.01M9 14h6"/></svg>' +
-                '键盘快捷键<span class="set-hint">?</span>' +
-              '</button>' +
+              (FINE_POINTER
+                ? '<button class="set-link" id="helpBtn" title="键盘快捷键（?）">' +
+                    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M6 14h.01M18 14h.01M9 14h6"/></svg>' +
+                    '键盘快捷键<span class="set-hint">?</span>' +
+                  '</button>'
+                : '') +
             '</div>' +
           '</div>' +
         '</div>' +
@@ -1043,7 +1059,14 @@ async function renderEpisode(id: string): Promise<void> {
         '<button class="p-btn" id="loopBtn" title="单句循环：循环当前句，练跟读（L）">' +
           LOOP_SVG +
         '</button>' +
-        '<button class="speed-btn' + (ep.rate === 1 ? ' is-one' : '') + '" id="speedBtn" title="点击切换倍速">' + ep.rate + '×</button>' +
+        '<div class="settings-wrap speed-wrap">' +
+          '<button class="speed-btn' + (ep.rate === 1 ? ' is-one' : '') + '" id="speedBtn" title="倍速" aria-haspopup="true" aria-expanded="false">' + ep.rate + '×</button>' +
+          '<div class="settings-pop speed-pop" id="speedPop" hidden>' +
+            SPEEDS.map(s =>
+              '<button class="set-link speed-opt' + (ep.rate === s ? ' on' : '') + '" data-rate="' + s + '">' + s + '×</button>'
+            ).join('') +
+          '</div>' +
+        '</div>' +
         '<div class="vol-wrap">' +
           '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 5.5a9 9 0 0 1 0 13"/></svg>' +
           '<input class="vol-range" id="volRange" type="range" min="0" max="1" step="0.05" value="1" title="音量">' +
@@ -1204,17 +1227,34 @@ function setupPlayer(audioSrc: string, prefs: Partial<EpPrefs>, fallbackSrc: str
     handlePosition(audio.currentTime);
   });
 
-  // 倍速循环键：0.5 → 0.75 → 1 → 1.25 → 1.5 → 2 → 0.5
-  speedBtn.addEventListener('click', () => {
-    const i = SPEEDS.indexOf(ep.rate);
-    setRate(SPEEDS[(i + 1) % SPEEDS.length]);
+  // 倍速档位菜单：弹出选择（替代原 6 档循环键），当前档高亮
+  const speedPop = mustGet('#speedPop');
+  const setSpeedPop = (open: boolean): void => {
+    speedPop.hidden = !open;
+    speedBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  };
+  speedBtn.addEventListener('click', e => {
+    e.stopPropagation();
+    const opening = speedPop.hidden;
+    if (opening) ep.closeSettings(); // 弹层互斥
+    setSpeedPop(opening);
   });
+  speedPop.addEventListener('click', e => e.stopPropagation());
+  const speedOpts = Array.from(speedPop.querySelectorAll<HTMLElement>('.speed-opt'));
+  speedOpts.forEach(btn => {
+    btn.addEventListener('click', () => {
+      setRate(parseFloat(btn.dataset.rate || '1'));
+      setSpeedPop(false);
+    });
+  });
+  ep.closeSpeed = () => setSpeedPop(false);
 
   function setRate(r: number): void {
     ep.rate = r;
     audio.playbackRate = r;
     speedBtn.textContent = r + '×';
     speedBtn.classList.toggle('is-one', r === 1);
+    speedOpts.forEach(b => b.classList.toggle('on', parseFloat(b.dataset.rate || '1') === r));
     saveEpPrefs();
   }
 
@@ -1320,7 +1360,7 @@ function setLoop(on: boolean): void {
   const btn = $('#loopBtn');
   if (btn) btn.classList.toggle('on', on);
   syncLoopBadge();
-  if (on) toast('单句循环已开启，再按 L 退出');
+  if (on) toast('单句循环已开启，再按一次退出');
   saveEpPrefs();
 }
 ep.setLoop = setLoop;
@@ -1346,20 +1386,24 @@ function loopThisSentence(i: number): void {
 
 /* ---------- 学习工具条 ---------- */
 function setupToolbar(): void {
-  // 字幕模式：单图标循环切换（双语 → 仅英文 → 仅中文）
-  const modeBtn = mustGet('#modeBtn');
+  // 字幕分段控件：状态可见、一键直达
+  const segBtns = Array.from(app.querySelectorAll<HTMLElement>('.seg-btn'));
   const applyMode = () => {
     app.classList.remove('mode-en', 'mode-zh');
     if (ep.mode !== 'both') app.classList.add('mode-' + ep.mode);
-    modeBtn.title = '字幕：' + MODE_LABELS[ep.mode] + '（点击切换）';
-    modeBtn.setAttribute('aria-label', '字幕模式：' + MODE_LABELS[ep.mode]);
+    segBtns.forEach(b => {
+      const on = b.dataset.mode === ep.mode;
+      b.classList.toggle('on', on);
+      b.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
   };
-  modeBtn.addEventListener('click', () => {
-    ep.mode = MODE_ORDER[(MODE_ORDER.indexOf(ep.mode) + 1) % MODE_ORDER.length];
+  segBtns.forEach(b => b.addEventListener('click', () => {
+    const m = b.dataset.mode;
+    if (!m || m === ep.mode) return;
+    ep.mode = m;
     applyMode();
-    toast('字幕：' + MODE_LABELS[ep.mode]);
     saveEpPrefs();
-  });
+  }));
 
   // 设置 popover：开合 + aria
   const settingsBtn = mustGet('#settingsBtn');
@@ -1371,7 +1415,9 @@ function setupToolbar(): void {
   };
   settingsBtn.addEventListener('click', e => {
     e.stopPropagation();
-    setPop(settingsPop.hidden);
+    const opening = settingsPop.hidden;
+    if (opening) ep.closeSpeed(); // 弹层互斥
+    setPop(opening);
   });
   settingsPop.addEventListener('click', e => e.stopPropagation());
   ep.closeSettings = () => setPop(false);
@@ -1405,11 +1451,14 @@ function setupToolbar(): void {
     applyFont();
   });
 
-  // 快捷键说明
-  mustGet('#helpBtn').addEventListener('click', () => {
-    setPop(false);
-    mustGet('#shortcutModal').classList.add('open');
-  });
+  // 快捷键说明（仅精细指针设备渲染该入口）
+  const helpBtn = $('#helpBtn');
+  if (helpBtn) {
+    helpBtn.addEventListener('click', () => {
+      setPop(false);
+      mustGet('#shortcutModal').classList.add('open');
+    });
+  }
 }
 
 /* ---------- 句子列表 ---------- */
@@ -1448,6 +1497,8 @@ document.addEventListener('keydown', e => {
 
   if (e.key === 'Escape') {
     if (modal.classList.contains('open')) { modal.classList.remove('open'); return; }
+    const speedPop = $('#speedPop');
+    if (speedPop && !speedPop.hidden) { ep.closeSpeed(); return; }
     const pop = $('#settingsPop');
     if (pop && !pop.hidden) { ep.closeSettings(); return; }
     if (currentView.name === 'episode' && ep.data) {
@@ -1503,6 +1554,8 @@ document.addEventListener('keydown', e => {
 document.addEventListener('click', () => {
   const pop = $('#settingsPop');
   if (pop && !pop.hidden) ep.closeSettings();
+  const speedPop = $('#speedPop');
+  if (speedPop && !speedPop.hidden) ep.closeSpeed();
 });
 window.addEventListener('beforeunload', saveEpPrefs);
 // PWA：注册 Service Worker（离线缓存 app shell 与已浏览节目）

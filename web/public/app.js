@@ -68,6 +68,7 @@
   var CHEV_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>';
   var BACK_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>';
   var LOOP_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 2l4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/><path d="M11 10h1v4"/></svg>';
+  var FINE_POINTER = window.matchMedia("(hover: hover) and (pointer: fine)").matches;
   var THEME_KEY = "cherina:theme";
   function applyTheme(t) {
     document.documentElement.dataset.theme = t;
@@ -454,7 +455,10 @@
   }
   var SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 2];
   var MODE_ORDER = ["both", "en", "zh"];
-  var MODE_LABELS = { both: "\u53CC\u8BED", en: "\u4EC5\u82F1\u6587", zh: "\u4EC5\u4E2D\u6587" };
+  function segBtnHtml(m, label) {
+    const on = ep.mode === m;
+    return '<button class="seg-btn' + (on ? " on" : "") + '" data-mode="' + m + '" aria-pressed="' + on + '">' + label + "</button>";
+  }
   var ep = {
     id: null,
     data: null,
@@ -479,6 +483,8 @@
     gotoSentence: () => {
     },
     closeSettings: () => {
+    },
+    closeSpeed: () => {
     }
   };
   var pendingSeek = null;
@@ -527,6 +533,8 @@
     ep.activeIdx = -1;
     ep.loop = false;
     ep.closeSettings = () => {
+    };
+    ep.closeSpeed = () => {
     };
     ep.pairEls = [];
   }
@@ -591,9 +599,11 @@
     const backHash = "#/podcast/" + encodeURIComponent(pcName);
     const descText = (info.description || "").trim();
     app.innerHTML = '<div class="ep-layout"><div class="ep-main"><div class="ep-hero"><div class="ep-hero-cover">' + coverHtml(info.image || pc.image, "cover", pcName) + '</div><div class="ep-head"><div class="pc-name">' + escapeHtml(pcName) + "</div><h1>" + escapeHtml(mainTitle) + '</h1><div class="meta">' + [info.pub_date, fmtDuration(info.duration)].filter(Boolean).map(escapeHtml).join(" \xB7 ") + "</div></div></div>" + /* 单集简介：主列头部，meta 之下、工具条之上，默认 2 行折叠 */
-    (descText ? '<div class="ep-desc-wrap"><div class="ep-desc clamped">' + escapeHtml(descText) + '</div><button class="desc-toggle">\u5C55\u5F00</button></div>' : "") + '<div class="toolbar"><a class="back-link" href="' + backHash + '" title="\u8FD4\u56DE" aria-label="\u8FD4\u56DE" id="epBackLink">' + BACK_SVG + '</a><div class="spacer"></div><button class="tbtn" id="modeBtn" title="\u5B57\u5E55\uFF1A' + MODE_LABELS[ep.mode] + '\uFF08\u70B9\u51FB\u5207\u6362\uFF09" aria-label="\u5B57\u5E55\u6A21\u5F0F\uFF1A' + MODE_LABELS[ep.mode] + '"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 8l6 6"/><path d="M4 14l6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="M22 22l-5-10-5 10"/><path d="M14 18h6"/></svg></button><div class="settings-wrap"><button class="tbtn" id="settingsBtn" title="\u5B66\u4E60\u8BBE\u7F6E" aria-label="\u5B66\u4E60\u8BBE\u7F6E" aria-haspopup="true" aria-expanded="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h9M18 6h3M3 12h3M12 12h9M3 18h11M20 18h1"/><circle cx="15" cy="6" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="18" r="2"/></svg></button><div class="settings-pop" id="settingsPop" hidden><div class="set-row"><span class="set-label">\u8DDF\u968F\u5F53\u524D\u53E5</span><span class="set-hint">F</span><button class="switch' + (ep.follow ? " on" : "") + '" id="followBtn" role="switch" aria-checked="' + (ep.follow ? "true" : "false") + '" title="\u8DDF\u968F\u5F53\u524D\u53E5\uFF08F\uFF09" aria-label="\u8DDF\u968F\u5F53\u524D\u53E5"></button></div><div class="set-row"><span class="set-label">\u5B57\u53F7</span><div class="set-stepper"><button class="tbtn" id="fontMinus" title="\u51CF\u5C0F\u5B57\u53F7" aria-label="\u51CF\u5C0F\u5B57\u53F7"><svg viewBox="0 0 24 24" fill="none"><text x="3" y="17" font-size="14" font-weight="800" fill="currentColor" font-family="inherit">A</text><path d="M14 13h7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button><span class="set-val" id="fontVal">' + +ep.fontScale.toFixed(2) + '</span><button class="tbtn" id="fontPlus" title="\u589E\u5927\u5B57\u53F7" aria-label="\u589E\u5927\u5B57\u53F7"><svg viewBox="0 0 24 24" fill="none"><text x="3" y="17" font-size="14" font-weight="800" fill="currentColor" font-family="inherit">A</text><path d="M14 13h7M17.5 9.5v7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button></div></div><button class="set-link" id="helpBtn" title="\u952E\u76D8\u5FEB\u6377\u952E\uFF08?\uFF09"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M6 14h.01M18 14h.01M9 14h6"/></svg>\u952E\u76D8\u5FEB\u6377\u952E<span class="set-hint">?</span></button></div></div></div><div class="list" id="list">' + (ep.pairs.length === 0 ? '<div class="empty">' + mascotHtml() + "\u8FD9\u671F\u8FD8\u6CA1\u6709\u53E5\u5B50\u6570\u636E</div>" : ep.pairs.map(
+    (descText ? '<div class="ep-desc-wrap"><div class="ep-desc clamped">' + escapeHtml(descText) + '</div><button class="desc-toggle">\u5C55\u5F00</button></div>' : "") + '<div class="toolbar"><a class="back-link" href="' + backHash + '" title="\u8FD4\u56DE" aria-label="\u8FD4\u56DE" id="epBackLink">' + BACK_SVG + '</a><div class="seg" role="group" aria-label="\u5B57\u5E55\u663E\u793A">' + segBtnHtml("both", "\u53CC\u8BED") + segBtnHtml("en", "\u82F1") + segBtnHtml("zh", "\u4E2D") + '</div><div class="spacer"></div><div class="settings-wrap"><button class="tbtn" id="settingsBtn" title="\u5B66\u4E60\u8BBE\u7F6E" aria-label="\u5B66\u4E60\u8BBE\u7F6E" aria-haspopup="true" aria-expanded="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h9M18 6h3M3 12h3M12 12h9M3 18h11M20 18h1"/><circle cx="15" cy="6" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="18" r="2"/></svg></button><div class="settings-pop" id="settingsPop" hidden><div class="set-row"><span class="set-label">\u8DDF\u968F\u5F53\u524D\u53E5</span>' + (FINE_POINTER ? '<span class="set-hint">F</span>' : "") + '<button class="switch' + (ep.follow ? " on" : "") + '" id="followBtn" role="switch" aria-checked="' + (ep.follow ? "true" : "false") + '" title="\u8DDF\u968F\u5F53\u524D\u53E5' + (FINE_POINTER ? "\uFF08F\uFF09" : "") + '" aria-label="\u8DDF\u968F\u5F53\u524D\u53E5"></button></div><div class="set-row"><span class="set-label">\u5B57\u53F7</span><div class="set-stepper"><button class="tbtn" id="fontMinus" title="\u51CF\u5C0F\u5B57\u53F7" aria-label="\u51CF\u5C0F\u5B57\u53F7"><svg viewBox="0 0 24 24" fill="none"><text x="3" y="17" font-size="14" font-weight="800" fill="currentColor" font-family="inherit">A</text><path d="M14 13h7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button><span class="set-val" id="fontVal">' + +ep.fontScale.toFixed(2) + '</span><button class="tbtn" id="fontPlus" title="\u589E\u5927\u5B57\u53F7" aria-label="\u589E\u5927\u5B57\u53F7"><svg viewBox="0 0 24 24" fill="none"><text x="3" y="17" font-size="14" font-weight="800" fill="currentColor" font-family="inherit">A</text><path d="M14 13h7M17.5 9.5v7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button></div></div>' + (FINE_POINTER ? '<button class="set-link" id="helpBtn" title="\u952E\u76D8\u5FEB\u6377\u952E\uFF08?\uFF09"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M6 14h.01M18 14h.01M9 14h6"/></svg>\u952E\u76D8\u5FEB\u6377\u952E<span class="set-hint">?</span></button>' : "") + '</div></div></div><div class="list" id="list">' + (ep.pairs.length === 0 ? '<div class="empty">' + mascotHtml() + "\u8FD9\u671F\u8FD8\u6CA1\u6709\u53E5\u5B50\u6570\u636E</div>" : ep.pairs.map(
       (p, i) => '<div class="pair" data-i="' + i + '"><div class="pair-actions"><button class="pa-btn" data-act="loop" title="\u5FAA\u73AF\u6B64\u53E5" aria-label="\u5FAA\u73AF\u6B64\u53E5">' + LOOP_SVG + '</button><button class="pa-btn" data-act="copy" title="\u590D\u5236\u82F1\u6587" aria-label="\u590D\u5236\u82F1\u6587"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button></div><span class="time">' + fmtTime(p.start) + '</span><div class="en">' + escapeHtml(p.en) + '</div><div class="zh">' + escapeHtml(p.zh) + "</div></div>"
-    ).join("")) + '</div></div></div><div class="playbar" id="playbar"><div class="pbar-hit" id="pbarHit" title="\u70B9\u51FB\u6216\u62D6\u62FD\u8DF3\u8F6C"><div class="pbar"><div class="pbar-fill" id="pbarFill"></div></div></div><div class="playbar-row"><div class="pb-cover-wrap">' + coverHtml(info.image || pc.image, "pb-cover", pcName) + '</div><div class="pb-now"><div class="np-line" id="npLine">' + escapeHtml(mainTitle) + '</div><div class="np-sub">' + escapeHtml(pcName) + '</div></div><button class="p-btn" id="back10" title="\u540E\u9000 10 \u79D2"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 17l-5-5 5-5"/><path d="M18 17l-5-5 5-5"/></svg></button><button class="p-btn main" id="playBtn" title="\u64AD\u653E / \u6682\u505C\uFF08\u7A7A\u683C\uFF09"><svg id="playIcon" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l11-6.5z"/></svg></button><button class="p-btn" id="fwd10" title="\u524D\u8FDB 10 \u79D2"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 17l5-5-5-5"/><path d="M6 17l5-5-5-5"/></svg></button><div class="times"><span class="cur" id="curTime">0:00</span> / <span id="durTime">' + escapeHtml(fmtTime(data.duration || parseDuration(info.duration))) + '</span></div><div class="spacer"></div><button class="p-btn" id="loopBtn" title="\u5355\u53E5\u5FAA\u73AF\uFF1A\u5FAA\u73AF\u5F53\u524D\u53E5\uFF0C\u7EC3\u8DDF\u8BFB\uFF08L\uFF09">' + LOOP_SVG + '</button><button class="speed-btn' + (ep.rate === 1 ? " is-one" : "") + '" id="speedBtn" title="\u70B9\u51FB\u5207\u6362\u500D\u901F">' + ep.rate + '\xD7</button><div class="vol-wrap"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 5.5a9 9 0 0 1 0 13"/></svg><input class="vol-range" id="volRange" type="range" min="0" max="1" step="0.05" value="1" title="\u97F3\u91CF"></div></div></div>';
+    ).join("")) + '</div></div></div><div class="playbar" id="playbar"><div class="pbar-hit" id="pbarHit" title="\u70B9\u51FB\u6216\u62D6\u62FD\u8DF3\u8F6C"><div class="pbar"><div class="pbar-fill" id="pbarFill"></div></div></div><div class="playbar-row"><div class="pb-cover-wrap">' + coverHtml(info.image || pc.image, "pb-cover", pcName) + '</div><div class="pb-now"><div class="np-line" id="npLine">' + escapeHtml(mainTitle) + '</div><div class="np-sub">' + escapeHtml(pcName) + '</div></div><button class="p-btn" id="back10" title="\u540E\u9000 10 \u79D2"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 17l-5-5 5-5"/><path d="M18 17l-5-5 5-5"/></svg></button><button class="p-btn main" id="playBtn" title="\u64AD\u653E / \u6682\u505C\uFF08\u7A7A\u683C\uFF09"><svg id="playIcon" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l11-6.5z"/></svg></button><button class="p-btn" id="fwd10" title="\u524D\u8FDB 10 \u79D2"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 17l5-5-5-5"/><path d="M6 17l5-5-5-5"/></svg></button><div class="times"><span class="cur" id="curTime">0:00</span> / <span id="durTime">' + escapeHtml(fmtTime(data.duration || parseDuration(info.duration))) + '</span></div><div class="spacer"></div><button class="p-btn" id="loopBtn" title="\u5355\u53E5\u5FAA\u73AF\uFF1A\u5FAA\u73AF\u5F53\u524D\u53E5\uFF0C\u7EC3\u8DDF\u8BFB\uFF08L\uFF09">' + LOOP_SVG + '</button><div class="settings-wrap speed-wrap"><button class="speed-btn' + (ep.rate === 1 ? " is-one" : "") + '" id="speedBtn" title="\u500D\u901F" aria-haspopup="true" aria-expanded="false">' + ep.rate + '\xD7</button><div class="settings-pop speed-pop" id="speedPop" hidden>' + SPEEDS.map(
+      (s) => '<button class="set-link speed-opt' + (ep.rate === s ? " on" : "") + '" data-rate="' + s + '">' + s + "\xD7</button>"
+    ).join("") + '</div></div><div class="vol-wrap"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 5.5a9 9 0 0 1 0 13"/></svg><input class="vol-range" id="volRange" type="range" min="0" max="1" step="0.05" value="1" title="\u97F3\u91CF"></div></div></div>';
     if (ep.mode !== "both") app.classList.add("mode-" + ep.mode);
     document.documentElement.style.setProperty("--pair-scale", String(ep.fontScale));
     app.querySelectorAll(".desc-toggle").forEach((btn) => {
@@ -735,15 +745,32 @@
       audio.currentTime = posToTime(e.clientX);
       handlePosition(audio.currentTime);
     });
-    speedBtn.addEventListener("click", () => {
-      const i = SPEEDS.indexOf(ep.rate);
-      setRate(SPEEDS[(i + 1) % SPEEDS.length]);
+    const speedPop = mustGet("#speedPop");
+    const setSpeedPop = (open) => {
+      speedPop.hidden = !open;
+      speedBtn.setAttribute("aria-expanded", open ? "true" : "false");
+    };
+    speedBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const opening = speedPop.hidden;
+      if (opening) ep.closeSettings();
+      setSpeedPop(opening);
     });
+    speedPop.addEventListener("click", (e) => e.stopPropagation());
+    const speedOpts = Array.from(speedPop.querySelectorAll(".speed-opt"));
+    speedOpts.forEach((btn) => {
+      btn.addEventListener("click", () => {
+        setRate(parseFloat(btn.dataset.rate || "1"));
+        setSpeedPop(false);
+      });
+    });
+    ep.closeSpeed = () => setSpeedPop(false);
     function setRate(r) {
       ep.rate = r;
       audio.playbackRate = r;
       speedBtn.textContent = r + "\xD7";
       speedBtn.classList.toggle("is-one", r === 1);
+      speedOpts.forEach((b) => b.classList.toggle("on", parseFloat(b.dataset.rate || "1") === r));
       saveEpPrefs();
     }
     volRange.addEventListener("input", () => {
@@ -843,7 +870,7 @@
     const btn = $("#loopBtn");
     if (btn) btn.classList.toggle("on", on);
     syncLoopBadge();
-    if (on) toast("\u5355\u53E5\u5FAA\u73AF\u5DF2\u5F00\u542F\uFF0C\u518D\u6309 L \u9000\u51FA");
+    if (on) toast("\u5355\u53E5\u5FAA\u73AF\u5DF2\u5F00\u542F\uFF0C\u518D\u6309\u4E00\u6B21\u9000\u51FA");
     saveEpPrefs();
   }
   ep.setLoop = setLoop;
@@ -868,19 +895,23 @@
     setLoop(true);
   }
   function setupToolbar() {
-    const modeBtn = mustGet("#modeBtn");
+    const segBtns = Array.from(app.querySelectorAll(".seg-btn"));
     const applyMode = () => {
       app.classList.remove("mode-en", "mode-zh");
       if (ep.mode !== "both") app.classList.add("mode-" + ep.mode);
-      modeBtn.title = "\u5B57\u5E55\uFF1A" + MODE_LABELS[ep.mode] + "\uFF08\u70B9\u51FB\u5207\u6362\uFF09";
-      modeBtn.setAttribute("aria-label", "\u5B57\u5E55\u6A21\u5F0F\uFF1A" + MODE_LABELS[ep.mode]);
+      segBtns.forEach((b) => {
+        const on = b.dataset.mode === ep.mode;
+        b.classList.toggle("on", on);
+        b.setAttribute("aria-pressed", on ? "true" : "false");
+      });
     };
-    modeBtn.addEventListener("click", () => {
-      ep.mode = MODE_ORDER[(MODE_ORDER.indexOf(ep.mode) + 1) % MODE_ORDER.length];
+    segBtns.forEach((b) => b.addEventListener("click", () => {
+      const m = b.dataset.mode;
+      if (!m || m === ep.mode) return;
+      ep.mode = m;
       applyMode();
-      toast("\u5B57\u5E55\uFF1A" + MODE_LABELS[ep.mode]);
       saveEpPrefs();
-    });
+    }));
     const settingsBtn = mustGet("#settingsBtn");
     const settingsPop = mustGet("#settingsPop");
     const setPop = (open) => {
@@ -890,7 +921,9 @@
     };
     settingsBtn.addEventListener("click", (e) => {
       e.stopPropagation();
-      setPop(settingsPop.hidden);
+      const opening = settingsPop.hidden;
+      if (opening) ep.closeSpeed();
+      setPop(opening);
     });
     settingsPop.addEventListener("click", (e) => e.stopPropagation());
     ep.closeSettings = () => setPop(false);
@@ -917,10 +950,13 @@
       ep.fontScale = Math.min(1.35, +(ep.fontScale + 0.07).toFixed(2));
       applyFont();
     });
-    mustGet("#helpBtn").addEventListener("click", () => {
-      setPop(false);
-      mustGet("#shortcutModal").classList.add("open");
-    });
+    const helpBtn = $("#helpBtn");
+    if (helpBtn) {
+      helpBtn.addEventListener("click", () => {
+        setPop(false);
+        mustGet("#shortcutModal").classList.add("open");
+      });
+    }
   }
   function setupList() {
     ep.pairEls = Array.from(document.querySelectorAll(".pair"));
@@ -955,6 +991,11 @@
     if (e.key === "Escape") {
       if (modal.classList.contains("open")) {
         modal.classList.remove("open");
+        return;
+      }
+      const speedPop = $("#speedPop");
+      if (speedPop && !speedPop.hidden) {
+        ep.closeSpeed();
         return;
       }
       const pop = $("#settingsPop");
@@ -1016,6 +1057,8 @@
   document.addEventListener("click", () => {
     const pop = $("#settingsPop");
     if (pop && !pop.hidden) ep.closeSettings();
+    const speedPop = $("#speedPop");
+    if (speedPop && !speedPop.hidden) ep.closeSpeed();
   });
   window.addEventListener("beforeunload", saveEpPrefs);
   if ("serviceWorker" in navigator) {

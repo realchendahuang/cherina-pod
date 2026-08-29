@@ -610,11 +610,42 @@
     overflow: hidden;
   }
 
-  /* ================= 学习工具条 ================= */
+  /* ================= 学习工具条（sticky 吸顶：长句列表中随时可切字幕/设置） ================= */
   .toolbar {
+    position: sticky;
+    top: 0;
+    z-index: 20;
     display: flex; align-items: center; gap: var(--app-space-3);
-    margin-bottom: var(--app-space-4);
-    flex-wrap: wrap;
+    margin: 0 calc(-1 * var(--app-space-3)) var(--app-space-4);
+    padding: var(--app-space-2) var(--app-space-3);
+    background: var(--app-sticky-bg);
+    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(12px);
+    border-radius: var(--app-radius-md);
+  }
+  /* 字幕分段控件：当前模式一眼可见、一键直达 */
+  .seg {
+    display: inline-flex;
+    gap: 2px;
+    padding: 3px;
+    background: var(--app-control-track-bg);
+    border: 1px solid var(--app-border);
+    border-radius: var(--app-radius-sm-plus);
+  }
+  .seg-btn {
+    padding: 5px var(--app-space-3);
+    font-size: var(--app-text-caption);
+    font-weight: 700;
+    color: var(--app-text-secondary);
+    border-radius: var(--app-radius-sm);
+    transition: color var(--app-duration-base) var(--app-ease-standard),
+                background var(--app-duration-base) var(--app-ease-standard),
+                transform var(--app-duration-base) var(--app-ease-standard);
+  }
+  .seg-btn.on {
+    background: var(--app-control-thumb-bg);
+    color: var(--app-selection-accent);
+    box-shadow: var(--app-control-thumb-shadow);
   }
   .tool-btn {
     display: inline-flex; align-items: center; gap: 5px;
@@ -970,6 +1001,19 @@
   }
   .speed-btn:hover { color: var(--app-action-accent); border-color: var(--app-border-active); }
   .speed-btn:not(.is-one) { color: var(--app-action-accent); border-color: var(--app-border-active); }
+  /* 倍速档位 popover（播放条在底部，向上弹出） */
+  .speed-wrap { position: relative; }
+  .speed-pop {
+    top: auto;
+    bottom: calc(100% + var(--app-space-2));
+    width: 7.5rem;
+  }
+  .speed-opt { justify-content: center; }
+  .speed-opt.on {
+    color: var(--app-selection-accent);
+    background: var(--app-selection-surface);
+    font-weight: 800;
+  }
 
   /* ================= 空状态：吉祥物陪伴 ================= */
   .empty {
@@ -1094,6 +1138,7 @@
     .times { font-size: var(--app-text-micro); }
     .pair { padding: var(--app-space-3) var(--app-space-3) var(--app-space-3); }
     .pair .en { font-size: calc(15.5px * var(--pair-scale)); }
+    .seg-btn { padding: 5px 10px; }
     .mini-card { width: 152px; }
   }
 </style>
