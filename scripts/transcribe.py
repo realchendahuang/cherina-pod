@@ -12,10 +12,14 @@
   python3 scripts/transcribe.py <episode_dir>
   # 从 <episode_dir>/meta.json 读 audio_path，输出 <episode_dir>/transcript.json
 
+断点续跑：提交任务后 task_id 落盘到 <episode_dir>/transcribe_task.json，
+轮询中断/超时后重跑本脚本只续查结果，不必重新上传音频（最贵的一步）。
+
 环境变量：
   DASHSCOPE_API_KEY  必需。阿里云百炼 API Key。
 """
 
+import argparse
 import json
 import os
 import sys
@@ -48,8 +52,9 @@ def http_json(url, data=None, headers=None, method=None, timeout=180):
             return json.loads(resp.read().decode("utf-8"))
     except urllib.error.HTTPError as e:
         body = e.read().decode("utf-8", errors="replace")
-        print(f"HTTP {e.code}：{body}", file=sys.stderr)
-        sys.exit(1)
+        raise RuntimeError(f"HTTP {e.code}：{body[:300]}") from e
+    except (urllib.error.URLError, OSError, json.JSONDecodeError) as e:
+        raise RuntimeError(f"{e}") from e
 
 
 def get_policy(key: str) -> dict:
@@ -113,11 +118,11 @@ def upload_audio(key: str, policy: dict, audio_path: str) -> str:
         with urllib.request.urlopen(req, timeout=180) as resp:
             resp.read()
     except urllib.error.HTTPError as e:
-        print(
-            f"上传失败 HTTP {e.code}：{e.read().decode('utf-8', errors='replace')}",
-            file=sys.stderr,
-        )
-        sys.exit(1)
+        raise RuntimeError(
+            f"上传失败 HTTP {e.code}：{e.read().decode('utf-8', errors='replace')[:300]}"
+        ) from e
+    except (urllib.error.URLError, OSError) as e:
+        raise RuntimeError(f"上传失败：{e}") from e
     return f"oss://{upload_dir}/{filename}"
 
 
@@ -144,32 +149,51 @@ def submit_task(key: str, oss_url: str) -> str:
     return resp["output"]["task_id"]
 
 
-def poll_task(key: str, task_id: str, max_wait=600) -> dict:
+def poll_task(key: str, task_id: str, max_wait=600):
+    """轮询任务直到 SUCCEEDED，返回响应；FAILED/超时返回 None（由调用方决定是否重提）。
+
+    轮询期间容忍少量瞬时网络错误（429/5xx/断连），连续多次才放弃——
+    一次抖动就报废整个任务太浪费（上传是最贵的一步）。
+    """
     url = f"{BASE}/api/v1/tasks/{task_id}"
     start = time.time()
     wait = 3  # 初始 3s，指数退避到最大 20s
+    transient = 0
     while time.time() - start < max_wait:
-        resp = http_json(url, headers={"Authorization": f"Bearer {key}"})
-        status = resp["output"]["task_status"]
+        try:
+            resp = http_json(url, headers={"Authorization": f"Bearer {key}"})
+        except RuntimeError as e:
+            transient += 1
+            if transient > 5:
+                print(f"连续网络错误，放弃轮询：{e}", file=sys.stderr)
+                return None
+            print(f"  ⚠️ 网络错误（{transient}/5），稍后重试：{e}", file=sys.stderr)
+            time.sleep(wait)
+            wait = min(wait * 2, 20)
+            continue
+        transient = 0
+        status = (resp.get("output") or {}).get("task_status")
         if status == "SUCCEEDED":
             return resp
         if status == "FAILED":
             print(f"任务失败：{json.dumps(resp, ensure_ascii=False)}", file=sys.stderr)
-            sys.exit(1)
+            return None
+        if status is None:
+            print(f"  ⚠️ 响应异常，稍后重试：{json.dumps(resp, ensure_ascii=False)[:200]}",
+                  file=sys.stderr)
         time.sleep(wait)
         wait = min(wait * 2, 20)
     print("轮询超时", file=sys.stderr)
-    sys.exit(1)
+    return None
 
 
 def download_result(key: str, task_resp: dict) -> dict:
-    for r in task_resp["output"]["results"]:
+    for r in task_resp.get("output", {}).get("results", []):
         if r.get("subtask_status") == "SUCCEEDED" and r.get("transcription_url"):
             return http_json(
                 r["transcription_url"], headers={"Authorization": f"Bearer {key}"}
             )
-    print("无成功子任务结果", file=sys.stderr)
-    sys.exit(1)
+    raise RuntimeError("无成功子任务结果")
 
 
 def to_transcript(result: dict, audio_rel: str) -> dict:
@@ -203,13 +227,38 @@ def to_transcript(result: dict, audio_rel: str) -> dict:
     }
 
 
+def run_transcription(key: str, ep_dir: Path, meta: dict, audio_path: Path) -> dict:
+    """完整流程：上传 → 提交 → 轮询 → 下载，返回 transcript dict。"""
+    print("1/5 获取临时上传凭证…")
+    policy = get_policy(key)
+    print("2/5 上传音频到临时 OSS…")
+    oss_url = upload_audio(key, policy, str(audio_path))
+    print(f"     oss://{oss_url.split('://')[1]}")
+    print("3/5 提交转写任务…")
+    task_id = submit_task(key, oss_url)
+    print(f"     task_id={task_id}")
+    # task_id 落盘：轮询中断/超时后重跑只需续查结果，不必重新上传（最贵的一步）
+    (ep_dir / "transcribe_task.json").write_text(
+        json.dumps({"task_id": task_id, "oss_url": oss_url}, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    print("4/5 轮询任务结果…")
+    task_resp = poll_task(key, task_id)
+    if task_resp is None:
+        (ep_dir / "transcribe_task.json").unlink(missing_ok=True)
+        raise RuntimeError("转写任务失败或轮询超时（重跑本脚本会重新提交任务）")
+    print("5/5 下载识别结果…")
+    result = download_result(key, task_resp)
+    return to_transcript(result, meta["audio_path"])
+
+
 def main():
-    if len(sys.argv) < 2:
-        print(__doc__)
-        return 2
-    force = "--force" in sys.argv
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("episode_dir")
+    ap.add_argument("--force", action="store_true", help="忽略已有 transcript.json，强制重新转写")
+    args = ap.parse_args()
     load_env()
-    ep_dir = Path(sys.argv[1]).resolve()
+    ep_dir = Path(args.episode_dir).resolve()
     meta_path = ep_dir / "meta.json"
     if not meta_path.exists():
         print(f"找不到 {meta_path}", file=sys.stderr)
@@ -220,37 +269,56 @@ def main():
         print(f"音频不存在：{audio_path}", file=sys.stderr)
         return 2
 
-    # 缓存跳过：已有 transcript.json 且未强制，直接复用（避免重复烧钱）
+    # 缓存跳过：句级 + 词级时间戳都在才算有效缓存（避免重复烧钱）。
+    # 只查 sentences 会把 words 缺失的坏缓存永久复用，词级时间戳就再也补不回来了。
     out = ep_dir / "transcript.json"
-    if out.exists() and not force:
+    if out.exists() and not args.force:
         cached = json.loads(out.read_text(encoding="utf-8"))
-        if cached.get("sentences"):
-            print(f"⏭️ 已有 transcript.json（{len(cached['sentences'])} 句），跳过转写")
-            print(f"   如需强制重新转写，加 --force 参数")
+        if cached.get("sentences") and cached.get("words"):
+            print(
+                f"⏭️ 已有 transcript.json（{len(cached['sentences'])} 句 / "
+                f"{len(cached['words'])} 词），跳过转写"
+            )
+            print("   如需强制重新转写，加 --force 参数")
             return 0
+        print("⚠️ 已有 transcript.json 缺少词级时间戳，重新转写补全", file=sys.stderr)
 
     key = api_key()
-    print("1/5 获取临时上传凭证…")
-    policy = get_policy(key)
-    print("2/5 上传音频到临时 OSS…")
-    oss_url = upload_audio(key, policy, str(audio_path))
-    print(f"     oss://{oss_url.split('://')[1]}")
-    print("3/5 提交转写任务…")
-    task_id = submit_task(key, oss_url)
-    print(f"     task_id={task_id}")
-    print("4/5 轮询任务结果…")
-    task_resp = poll_task(key, task_id)
-    print("5/5 下载识别结果…")
-    result = download_result(key, task_resp)
-    transcript = to_transcript(result, meta["audio_path"])
-    out.write_text(
-        json.dumps(transcript, ensure_ascii=False, indent=2), encoding="utf-8"
-    )
-    print(f"✅ transcript.json 已生成：{out}")
-    print(
-        f"   共 {len(transcript['sentences'])} 句，{len(transcript['words'])} 词，时长 {transcript['duration']:.1f}s"
-    )
-    return 0
+    task_path = ep_dir / "transcribe_task.json"
+    try:
+        task_resp = None
+        # 断点续查：上次提交过任务但没等到结果，直接续查 task_id
+        if not args.force and task_path.exists():
+            try:
+                task_id = json.loads(task_path.read_text(encoding="utf-8")).get("task_id")
+            except json.JSONDecodeError:
+                task_id = None
+            if task_id:
+                print(f"发现未完成的转写任务 task_id={task_id}，续查结果…")
+                task_resp = poll_task(key, task_id, max_wait=300)
+                if task_resp is None:
+                    print("  ⚠️ 该任务已失败/超时，重新上传提交", file=sys.stderr)
+        if task_resp is not None:
+            print("5/5 下载识别结果…")
+            transcript = to_transcript(
+                download_result(key, task_resp), meta["audio_path"]
+            )
+        else:
+            transcript = run_transcription(key, ep_dir, meta, audio_path)
+
+        out.write_text(
+            json.dumps(transcript, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+        task_path.unlink(missing_ok=True)
+        print(f"✅ transcript.json 已生成：{out}")
+        print(
+            f"   共 {len(transcript['sentences'])} 句，{len(transcript['words'])} 词，"
+            f"时长 {transcript['duration']:.1f}s"
+        )
+        return 0
+    except RuntimeError as e:
+        print(f"错误：{e}", file=sys.stderr)
+        return 1
 
 
 if __name__ == "__main__":

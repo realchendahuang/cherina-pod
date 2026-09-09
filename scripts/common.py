@@ -21,14 +21,19 @@ UA = (
 
 
 def load_env():
-    """读取 .env 到环境变量（不覆盖已有值）。"""
+    """读取 .env 到环境变量（不覆盖已有值；容忍 export 前缀与成对引号）。"""
     env_path = ROOT / ".env"
     if env_path.exists():
         for line in env_path.read_text().splitlines():
             line = line.strip()
+            if line.startswith("export "):
+                line = line[len("export "):].strip()
             if line and not line.startswith("#") and "=" in line:
                 k, _, v = line.partition("=")
-                os.environ.setdefault(k.strip(), v.strip())
+                v = v.strip()
+                if len(v) >= 2 and v[0] == v[-1] and v[0] in "\"'":
+                    v = v[1:-1]
+                os.environ.setdefault(k.strip(), v)
 
 
 def http_get(url, timeout=60):

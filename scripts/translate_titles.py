@@ -26,10 +26,37 @@ PROMPT = """你是专业的播客单集标题翻译。把下面 JSON 数组里�
 输入：
 {titles_json}"""
 
+BATCH_TITLES = 20  # 每次调用翻译的标题数：一次全量塞 max_tokens 会截断
+
+
+def translate_title_batch(provider_order, batch):
+    """翻一批标题：供应商按序尝试，全部失败返回 None，成功返回 {id: result}。"""
+    prompt = PROMPT.format(titles_json=json.dumps(batch, ensure_ascii=False, indent=2))
+    for provider in provider_order:
+        try:
+            content = chat_completion_retry(
+                provider,
+                [{"role": "user", "content": prompt}],
+                max_tokens=4000,
+            )
+            # 提取 JSON 数组（模型可能包 ```json）
+            start, end = content.find("["), content.rfind("]")
+            if start < 0 or end < 0:
+                raise ValueError(f"响应中未找到 JSON 数组：{content[:300]}")
+            results = json.loads(content[start : end + 1])
+            if not isinstance(results, list):
+                raise ValueError("响应不是 JSON 数组")
+            return {
+                str(r.get("id", "")): r for r in results if isinstance(r, dict)
+            }
+        except (RuntimeError, ValueError, json.JSONDecodeError) as e:
+            print(f"  ⚠️ [{provider['name']}] 批次失败，尝试下一家：{e}", file=sys.stderr)
+    return None
+
 
 def main():
     load_env()
-    provider = available_providers()[0]
+    provider_order = available_providers()
 
     todo = []
     files = {}
@@ -51,20 +78,18 @@ def main():
         print("✅ 所有期已有中文标题，无需处理")
         return 0
 
-    print(f"待译标题 {len(todo)} 期，调用 {provider['name']}…")
-    content = chat_completion_retry(
-        provider,
-        [{"role": "user", "content": PROMPT.format(titles_json=json.dumps(todo, ensure_ascii=False, indent=2))}],
-        max_tokens=4000,
-    )
-    # 提取 JSON 数组（模型可能包 ```json）
-    start, end = content.find("["), content.rfind("]")
-    if start < 0 or end < 0:
-        print(f"错误：响应中未找到 JSON 数组：\n{content[:500]}", file=sys.stderr)
-        return 1
-    results = json.loads(content[start : end + 1])
+    n_batches = -(-len(todo) // BATCH_TITLES)
+    print(f"待译标题 {len(todo)} 期，分 {n_batches} 批调用（{provider_order[0]['name']} 优先）…")
 
-    by_id = {r["id"]: r for r in results}
+    by_id = {}
+    for bi in range(n_batches):
+        chunk = todo[bi * BATCH_TITLES : (bi + 1) * BATCH_TITLES]
+        got = translate_title_batch(provider_order, chunk)
+        if got is None:
+            print(f"错误：批次 {bi + 1}/{n_batches} 全部供应商失败，中止（已完成的批次保留）", file=sys.stderr)
+            break
+        by_id.update(got)
+
     updated = 0
     for ep_id, meta_path in files.items():
         r = by_id.get(ep_id)

@@ -105,10 +105,10 @@ def chat_completion(provider, messages, max_tokens=3000, timeout=300):
         raise RuntimeError(f"[{provider['name']}] {e}") from e
 
 
-def chat_completion_retry(provider, messages, max_tokens=3000, timeout=300, retries=2):
-    """chat_completion + 空响应/失败自动重试。"""
+def chat_completion_retry(provider, messages, max_tokens=3000, timeout=300, attempts=2):
+    """chat_completion + 空响应/失败自动重试（共 attempts 次尝试）。"""
     last_err = None
-    for _ in range(retries):
+    for _ in range(max(1, attempts)):
         try:
             return chat_completion(provider, messages, max_tokens, timeout)
         except RuntimeError as e:
@@ -160,7 +160,12 @@ def translate_batch(batch, order):
     for provider in order:
         try:
             raw = chat_completion_retry(provider, messages, max_tokens=6000)
-            return parse_translation(raw, expected), provider["name"]
+            parsed = parse_translation(raw, expected)
+            # en 一律回填 transcript 原文：模型回抄可能微调大小写/空格，
+            # 会破坏断点续跑去重与 align 的按文本匹配（同句反复重译、译文对不上）。
+            for item, s in zip(parsed, batch):
+                item["en"] = s["text"]
+            return parsed, provider["name"]
         except RuntimeError as e:
             last_err = str(e)
             print(
@@ -205,10 +210,16 @@ def translate_sentences(
     if not batches:
         return results
 
+    # 批次结果按批序号收齐后统一按原序拼接：as_completed 的完成序会把
+    # translation.json 写乱，与 transcript 顺序脱钩。
+    done = {}
+
     def flush_partial():
         if out_path:
+            ordered = [item for bi in sorted(done) for item in done[bi]]
             out_path.write_text(
-                json.dumps(results, ensure_ascii=False, indent=2), encoding="utf-8"
+                json.dumps(results + ordered, ensure_ascii=False, indent=2),
+                encoding="utf-8",
             )
 
     failed = None
@@ -217,32 +228,41 @@ def translate_sentences(
             ex.submit(translate_batch, b, order): (bi, b)
             for bi, b in enumerate(batches)
         }
-        for fut in as_completed(futs):
-            bi, b = futs[fut]
-            try:
+        try:
+            for fut in as_completed(futs):
+                bi, b = futs[fut]
                 batch_result, pname = fut.result()
-            except RuntimeError as e:
-                failed = e
-                for f in futs:
-                    f.cancel()
-                break
-            results.extend(batch_result)
-            print(
-                f"  [批次 {bi + 1}/{len(batches)}] 完成（{pname}），"
-                f"已累计 {len(results)}/{len(sentences)}"
-            )
-            # 每 ~5 批落盘一次，崩溃可断点续跑
-            if len(results) % (batch_size * 5) < batch_size:
-                flush_partial()
+                done[bi] = batch_result
+                n_done = len(results) + sum(len(v) for v in done.values())
+                print(
+                    f"  [批次 {bi + 1}/{len(batches)}] 完成（{pname}），"
+                    f"已累计 {n_done}/{len(sentences)}"
+                )
+                # 每 5 批落盘一次，崩溃可断点续跑
+                if len(done) % 5 == 0:
+                    flush_partial()
+        except RuntimeError as e:
+            failed = e
+            for f in futs:
+                f.cancel()
+        # 收割已完成但未来得及消费的结果，失败退出时尽量少丢已完成的工作
+        for f, (bi, _b) in futs.items():
+            if bi in done or f.cancelled() or not f.done():
+                continue
+            if f.exception() is None:
+                done[bi] = f.result()[0]
 
     if failed is not None:
         flush_partial()
+        n_saved = len(results) + sum(len(v) for v in done.values())
         print(f"错误：{failed}", file=sys.stderr)
         print(
-            f"  ⚠️ 已保存部分结果 {len(results)}/{len(sentences)}，可断点续跑（会跳过已译句）",
+            f"  ⚠️ 已保存部分结果 {n_saved}/{len(sentences)}，可断点续跑（会跳过已译句）",
             file=sys.stderr,
         )
         sys.exit(1)
+
+    results.extend(item for bi in sorted(done) for item in done[bi])
     return results
 
 
@@ -278,13 +298,6 @@ def parse_translation(raw, expected):
     return out
 
 
-def save_partial(results, total):
-    print(
-        f"  ⚠️ 已保存部分结果 {len(results)}/{total}，可断点续跑（会跳过已译句）",
-        file=sys.stderr,
-    )
-
-
 def main():
     import argparse
 
@@ -306,7 +319,7 @@ def main():
         return 2
 
     providers = available_providers()
-    print(f"可用供应商：{', '.join(p['name'] for p in providers)}（轮询负载均衡）")
+    print(f"可用供应商：{', '.join(p['name'] for p in providers)}（preferred 优先，失败自动切换）")
 
     # 断点续跑：读已有 translation.json
     resume = None

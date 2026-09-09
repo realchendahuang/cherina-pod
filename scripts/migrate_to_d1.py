@@ -97,6 +97,11 @@ def main() -> int:
     podcast_meta.pop("_comment", None)
 
     MIGRATIONS.mkdir(parents=True, exist_ok=True)
+    # 先清掉上次生成的迁移文件：分片数随数据量变化，残留旧分片会在部署时与新数据
+    # 重复插入，触发 (episode_id, idx) 主键冲突，wrangler 中途报错后 D1 停在半灌状态。
+    for old in MIGRATIONS.glob("*.sql"):
+        old.unlink()
+
     (MIGRATIONS / "0001_init.sql").write_text(build_schema_sql(), encoding="utf-8")
     print("✅ 0001_init.sql（建表 + FTS5）")
 
@@ -105,7 +110,7 @@ def main() -> int:
     n_pairs = 0
     part = 1
     pairs_batch = []
-    pairs_out = MIGRATIONS / f"0003_pairs_part{part:02d}.sql"
+    pairs_out = MIGRATIONS / f"0003_pairs_part{part:03d}.sql"
     pairs_header = "INSERT INTO pairs (episode_id, idx, start, end, en, zh) VALUES\n"
 
     def flush_pairs():
@@ -115,7 +120,7 @@ def main() -> int:
         pairs_out.write_text(pairs_header + ",\n".join(pairs_batch) + ";", encoding="utf-8")
         part += 1
         pairs_batch = []
-        pairs_out = MIGRATIONS / f"0003_pairs_part{part:02d}.sql"
+        pairs_out = MIGRATIONS / f"0003_pairs_part{part:03d}.sql"
 
     for ep_dir in sorted(EPISODES.iterdir()):
         bj = ep_dir / "bilingual.json"
@@ -168,13 +173,16 @@ def main() -> int:
                 flush_pairs()
     flush_pairs()
 
-    episodes_sql = (
-        "INSERT INTO episodes ("
-        "id, podcast, podcast_title_zh, author, category, level, "
-        "episode_title, episode_title_zh, description, image, podcast_image, pub_date, "
-        "duration, pairs_count, audio_url"
-        ") VALUES\n" + ",\n".join(ep_rows) + ";"
-    )
+    if ep_rows:
+        episodes_sql = (
+            "INSERT INTO episodes ("
+            "id, podcast, podcast_title_zh, author, category, level, "
+            "episode_title, episode_title_zh, description, image, podcast_image, pub_date, "
+            "duration, pairs_count, audio_url"
+            ") VALUES\n" + ",\n".join(ep_rows) + ";"
+        )
+    else:
+        episodes_sql = "-- episodes 为空：占位注释，避免生成非法的空 INSERT"
     (MIGRATIONS / "0002_episodes.sql").write_text(episodes_sql, encoding="utf-8")
     print(f"✅ 0002_episodes.sql（{len(ep_rows)} 期元数据，完整字段）")
     print(f"✅ pairs 分片：{part - 1} 个文件，共 {n_pairs} 句")

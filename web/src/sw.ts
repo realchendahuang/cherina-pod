@@ -1,16 +1,18 @@
 // Cherina Pod Service Worker（原 public/sw.js，TS 化后由 esbuild 打包回 public/sw.js）。
 // 策略概览：
-//   app shell（HTML/字体/图标/manifest）  → cache-first（离线可开站）
+//   HTML 与 /app.js                     → network-first，失败落缓存（线上即时更新，断网可开站）
+//   字体/图标/manifest                   → cache-first（不可变资源）
 //   /api/episodes（列表+详情）            → network-first，失败落缓存（断网可读已浏览节目）
 //   /api/search 与音频外链等其他请求      → 不缓存
 //
 // 版本约定：发布新版本时递增 CACHE_VERSION 即可，旧缓存会在 activate 阶段自动清理。
+// （HTML/app.js 走 network-first 后，忘了 bump 也只是浪费一次预缓存，不会再新旧混搭。）
 // 类型说明：Service Worker 运行在 ServiceWorkerGlobalScope 下，TS 的 lib.webworker 已收录
 // 完整类型（self / caches / FetchEvent / ExtendableEvent 等），此处显式收窄 self 即可。
 
 const sw = self as unknown as ServiceWorkerGlobalScope;
 
-const CACHE_VERSION = 'cherina-v4';
+const CACHE_VERSION = 'cherina-v5';
 const PRECACHE_URLS = [
   './',
   './index.html',
@@ -60,7 +62,7 @@ async function networkFirst(request: Request): Promise<Response> {
   }
 }
 
-// 缓存优先：app shell 静态资源
+// 缓存优先：不可变的 app shell 静态资源（字体/图标/manifest）
 async function cacheFirst(request: Request): Promise<Response> {
   const cached = await caches.match(request);
   if (cached) return cached;
@@ -75,9 +77,15 @@ sw.addEventListener('fetch', (event) => {
 
   const path = url.pathname;
 
+  // HTML 与 app.js 走 network-first：线上即时更新，断网回落缓存（离线可开站）。
+  // 注意 /app.js 必须进 respondWith 分支——它虽然在 install 时预缓存过，
+  // 但不接管的话离线时 HTML 能从缓存出来而 JS 直接挂掉，PWA 离线承诺形同虚设。
+  if (path === '/' || path === '/index.html' || path === '/app.js') {
+    event.respondWith(networkFirst(request));
+    return;
+  }
+
   if (
-    path === '/' ||
-    path === '/index.html' ||
     path.startsWith('/brand/') ||
     path.startsWith('/fonts/') ||
     path === '/manifest.webmanifest'

@@ -6,15 +6,15 @@
 - 翻译模型：DeepSeek V4 Flash（ollama-cloud / opencode-go 双供应商负载均衡）
 
 ## 核心约定
-- **转写必须保留词级时间戳**，这是逐句对齐的基础，任何环节不得丢弃
-- 翻译遵循信达雅原则，逐句输出 JSON `{en, zh}`，与时间戳一一对应（时间戳在 align.py 以 transcript 为准）
+- **转写必须保留词级时间戳**，这是逐句对齐的基础，任何环节不得丢弃；`episodes/*/transcript.json`（含 words）**提交进仓库**，是词级时间戳的唯一持久层
+- 翻译遵循信达雅原则，逐句输出 JSON `{en, zh}`，与时间戳一一对应（时间戳在 align.py 以 transcript 为准；translation.json 的 en 必须回填 transcript 原文，保证续跑/对齐键稳定）
 - 线上展示页 + D1 数据 API，不做转写/翻译；所有 AI 处理都在本地
 - 密钥只放 `.env`（gitignore），绝不上传仓库
 
 ## 目录
 - `scripts/`：本地流水线脚本
 - `skills/`：流水线 skill 说明
-- `episodes/`：每期一目录（音频 gitignore；`bilingual.json` 是 D1 灌库原料）
+- `episodes/`：每期一目录（音频/translation.json gitignore；`transcript.json` 与 `bilingual.json` 提交，后者是 D1 灌库原料）
 - `web/`：Cloudflare Worker 展示网页 + D1 API
 - `docs/`：方案与文档
 

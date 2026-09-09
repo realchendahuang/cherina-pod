@@ -6,6 +6,7 @@
   输出 <episode_dir>/bilingual.json
 """
 
+import argparse
 import datetime
 import json
 import sys
@@ -17,10 +18,15 @@ from common import norm_text  # noqa: E402
 
 
 def main():
-    if len(sys.argv) < 2:
-        print(__doc__)
-        return 2
-    ep_dir = Path(sys.argv[1]).resolve()
+    ap = argparse.ArgumentParser(description="合并 meta + transcript + translation → bilingual.json")
+    ap.add_argument("episode_dir")
+    ap.add_argument(
+        "--allow-missing",
+        action="store_true",
+        help="有缺译文时仍生成文件并以退出码 0 结束（调试用）",
+    )
+    args = ap.parse_args()
+    ep_dir = Path(args.episode_dir).resolve()
     meta_path = ep_dir / "meta.json"
     trans_path = ep_dir / "transcript.json"
     tr_path = ep_dir / "translation.json"
@@ -42,9 +48,15 @@ def main():
 
     pairs = []
     missing = 0
+    dup_texts = 0
+    seen_texts = set()
     for s in transcript["sentences"]:
         text = s["text"]
-        zh = zh_by_text.get(norm_text(text))
+        key = norm_text(text)
+        if key in seen_texts:
+            dup_texts += 1
+        seen_texts.add(key)
+        zh = zh_by_text.get(key)
         if zh is None:
             missing += 1
             zh = ""
@@ -58,6 +70,12 @@ def main():
         )
     if missing:
         print(f"⚠️ {missing} 句缺译文（请续跑 translate.py 后重新对齐）", file=sys.stderr)
+        if dup_texts:
+            print(
+                f"   （transcript 含 {dup_texts} 句重复文本，重复句共用第一条译文，"
+                f"可能张冠李戴，建议人工抽查）",
+                file=sys.stderr,
+            )
 
     pc = meta["podcast"]
     bilingual = {
@@ -89,6 +107,10 @@ def main():
         json.dumps(bilingual, ensure_ascii=False, indent=2), encoding="utf-8"
     )
     print(f"✅ bilingual.json 已生成：{out}（{len(pairs)} 句）")
+    # 缺译文默认视为失败：空 zh 会被灌进 D1 直接上线，必须显式放行才能通过
+    if missing and not args.allow_missing:
+        print(f"错误：{missing} 句缺译文，请先补齐翻译（--allow-missing 可强制放行）", file=sys.stderr)
+        return 1
     return 0
 
 

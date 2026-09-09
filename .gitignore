@@ -22,10 +22,10 @@ node_modules/
 .wrangler/
 .dev.vars
 
-# 播客音频与中间产物（只提交双语 JSON）
+# 播客音频与原始译文不入库；transcript.json 必须提交——它是词级时间戳（项目红线）
+# 的唯一持久层（bilingual.json 不含 words），目录误删就只能重新烧钱转写
 episodes/*/audio/
 web/public/episodes/*/audio/
-episodes/*/transcript.json
 episodes/*/translation.json
 episodes/*/*.mp3
 episodes/*/*.m4a

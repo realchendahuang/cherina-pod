@@ -7,10 +7,12 @@ import { build, context } from 'esbuild';
 
 const watch = process.argv.includes('--watch');
 
+// 生产构建开 minify + sourcemap：包体显著变小；出问题时 .map 可还原排错。
+// watch（本地开发）保持不压缩，便于直接读产物调试。
 const common = {
   bundle: true,
-  minify: false,
-  sourcemap: false,
+  minify: !watch,
+  sourcemap: !watch,
   target: 'es2022',
   logLevel: 'info',
 };

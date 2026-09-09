@@ -163,6 +163,7 @@ const FINE_POINTER = window.matchMedia('(hover: hover) and (pointer: fine)').mat
 
 /* ================= 主题（默认亮色，localStorage 记忆） ================= */
 const THEME_KEY = 'cherina:theme';
+const VOLUME_KEY = 'cherina:volume'; // 全局音量（跨集记忆，不进单集 prefs）
 function applyTheme(t: string): void {
   document.documentElement.dataset.theme = t;
   const meta = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
@@ -268,6 +269,10 @@ function groupChannels(items: EpisodeItem[]): Channel[] {
 // currentView: { name: 'discover' | 'podcast' | 'episode', param }
 const currentView: { name: 'discover' | 'podcast' | 'episode'; param: string | null } = { name: 'discover', param: null };
 
+// 渲染代数：快速连续切换页面时，旧 render 里 await 返回后据此识别自己已过期，
+// 不再覆盖新页面 DOM（也不会再创建播放器/定时器——那是 saveTimer 泄漏的根源）
+let renderSeq = 0;
+
 // 应用内导航栈：记录用户实际进入上一页的 hash，返回按钮据此"回到来源页"
 // 而非硬编码的逻辑父级。仅在站内点击跳转时压栈；深链直达时不压栈。
 const navStack: string[] = [];
@@ -329,7 +334,10 @@ function bindNav(root: ParentNode): void {
       if (type === 'ep' && seek != null) {
         pendingSeek = { id: decodeURIComponent(payload), t: +seek };
       }
-      navStack.push(location.hash || '#/');
+      // 去重 + 上限：重复导航同一目标时不去重会让返回链堆积冗余项
+      const cur = location.hash || '#/';
+      if (navStack[navStack.length - 1] !== cur) navStack.push(cur);
+      while (navStack.length > 32) navStack.shift();
       location.hash = '#/' + type + '/' + payload;
     };
     el.addEventListener('click', open);
@@ -373,11 +381,21 @@ function notFoundHtml(msg: string, detail?: string): string {
   );
 }
 
+/* 路由渲染后把焦点移到页首标题：innerHTML 全量替换会让键盘用户焦点掉回 body，每次导航都得从头 Tab */
+function focusHeading(): void {
+  const h = app.querySelector<HTMLElement>('h1');
+  if (!h) return;
+  h.setAttribute('tabindex', '-1');
+  h.style.outline = 'none';
+  h.focus({ preventScroll: true });
+}
+
 /* ================= 页面 1：发现首页 ================= */
 async function renderDiscover(): Promise<void> {
   cleanupEpisode();
   currentView.name = 'discover';
   currentView.param = null;
+  const mySeq = ++renderSeq;
   seoBase('Cherina Pod · 双语播客精听', SITE_DESC, SITE_URL + '/', SITE_URL + '/brand/web-logo-small.svg');
   container.className = 'container';
   app.className = '';
@@ -387,9 +405,11 @@ async function renderDiscover(): Promise<void> {
   try {
     data = await loadIndex();
   } catch (e) {
+    if (mySeq !== renderSeq) return;
     app.innerHTML = loadFailHtml(e);
     return;
   }
+  if (mySeq !== renderSeq) return; // await 期间用户已切到别的页面
   const items = data.items || [];
   if (!items.length) {
     app.innerHTML =
@@ -449,7 +469,7 @@ async function renderDiscover(): Promise<void> {
 
   // 继续听：读 localStorage 里各期收听进度，按最近收听排序，取前 4
   const continuing = items
-    .map(it => ({ it, prefs: loadEpPrefs(it.id) }))
+    .map(it => ({ it, prefs: loadEpPrefsCached(it.id) }))
     .filter((x): x is { it: EpisodeItem; prefs: EpPrefs } =>
       x.prefs != null && typeof x.prefs.t === 'number' && x.prefs.t > 0)
     .sort((a, b) => (b.prefs.ts || 0) - (a.prefs.ts || 0))
@@ -487,9 +507,12 @@ async function renderDiscover(): Promise<void> {
     '<div id="searchResults" hidden></div>';
 
   bindNav(app);
+  // 标题搜索防抖：每个键击都对全量 items 过滤 + 重建 innerHTML 太浪费
+  let discoverSearchTimer: ReturnType<typeof setTimeout> | null = null;
   mustGet('#searchInput').addEventListener('input', e => {
     const raw = (e.target as HTMLInputElement).value.trim();
-    drawDiscoverSearch(raw.toLowerCase(), channels, items);
+    if (discoverSearchTimer != null) clearTimeout(discoverSearchTimer);
+    discoverSearchTimer = setTimeout(() => drawDiscoverSearch(raw.toLowerCase(), channels, items), 120);
     scheduleSentenceSearch(raw);
   });
 }
@@ -604,13 +627,16 @@ async function runSentenceSearch(raw: string): Promise<void> {
   const mySeq = ++sentenceSearchSeq;
   try {
     const resp = await fetch('/api/search?q=' + encodeURIComponent(raw));
-    if (!resp.ok) return;
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
     const data = await resp.json();
     if (mySeq !== sentenceSearchSeq) return; // 过期响应丢弃
     if (currentView.name !== 'discover') return;
     renderSentenceHits(raw, data.items || []);
   } catch {
-    // D1 未就绪/网络失败：静默降级为纯标题搜索
+    // D1 未就绪/网络失败：别让「正在检索双语逐句…」占位永远挂着，就地改成明确提示
+    if (mySeq !== sentenceSearchSeq || currentView.name !== 'discover') return;
+    const detail = $('#searchResults .empty .empty-detail');
+    if (detail) detail.textContent = '句子检索暂不可用，已退回仅标题搜索';
   }
 }
 
@@ -672,6 +698,7 @@ async function renderPodcast(key: string): Promise<void> {
   cleanupEpisode();
   currentView.name = 'podcast';
   currentView.param = key;
+  const mySeq = ++renderSeq;
   document.title = key + ' · Cherina Pod';
   container.className = 'container';
   app.className = '';
@@ -681,9 +708,11 @@ async function renderPodcast(key: string): Promise<void> {
   try {
     data = await loadIndex();
   } catch (e) {
+    if (mySeq !== renderSeq) return;
     app.innerHTML = loadFailHtml(e);
     return;
   }
+  if (mySeq !== renderSeq) return; // await 期间用户已切到别的页面
   const eps = (data.items || [])
     .filter(it => (it.podcast_title || it.podcast_title_zh || '未命名播客') === key)
     .sort((a, b) => String(b.pub_date || '').localeCompare(String(a.pub_date || '')));
@@ -730,6 +759,7 @@ async function renderPodcast(key: string): Promise<void> {
     '</div>';
 
   bindNav(app);
+  focusHeading();
 }
 
 /* 单集行（频道页 / 搜索结果共用） */
@@ -744,7 +774,7 @@ function epRowHtml(it: EpisodeItem, num: number, showPodcast: boolean): string {
 
   // 收听进度（localStorage 记忆）
   let heardHtml = '';
-  const prefs = loadEpPrefs(it.id);
+  const prefs = loadEpPrefsCached(it.id);
   if (prefs && typeof prefs.t === 'number' && prefs.t >= 5) {
     const total = parseDuration(it.duration);
     const pct = total > 0 ? Math.min(100, Math.round((prefs.t / total) * 100)) : 0;
@@ -841,6 +871,15 @@ function loadEpPrefs(id: string): EpPrefs | null {
   } catch { return null; }
 }
 
+/* 带内存缓存的读取：列表渲染逐行 loadEpPrefs 的同步 IO（getItem + JSON.parse）收敛为首次一次 */
+const epPrefsCache = new Map<string, EpPrefs | null>();
+function loadEpPrefsCached(id: string): EpPrefs | null {
+  if (epPrefsCache.has(id)) return epPrefsCache.get(id) || null;
+  const v = loadEpPrefs(id);
+  epPrefsCache.set(id, v);
+  return v;
+}
+
 function saveEpPrefs(): void {
   if (!ep.id || !ep.audio) return;
   const prefs: EpPrefs = {
@@ -851,7 +890,10 @@ function saveEpPrefs(): void {
     follow: ep.follow,
     ts: Date.now(),
   };
-  try { localStorage.setItem(epStoreKey(ep.id), JSON.stringify(prefs)); } catch { /* 忽略 */ }
+  try {
+    localStorage.setItem(epStoreKey(ep.id), JSON.stringify(prefs));
+    epPrefsCache.set(ep.id, prefs); // 同步内存缓存
+  } catch { /* 忽略 */ }
 }
 
 function cleanupEpisode(): void {
@@ -877,6 +919,7 @@ async function renderEpisode(id: string): Promise<void> {
   cleanupEpisode();
   currentView.name = 'episode';
   currentView.param = id;
+  const mySeq = ++renderSeq;
   document.title = '加载中… · Cherina Pod';
   container.className = 'container has-playbar';
   app.className = '';
@@ -887,9 +930,11 @@ async function renderEpisode(id: string): Promise<void> {
     if (!resp.ok) throw new Error('HTTP ' + resp.status);
     data = await resp.json();
   } catch (e) {
+    if (mySeq !== renderSeq) return;
     app.innerHTML = notFoundHtml('找不到这期节目', (e as Error).message);
     return;
   }
+  if (mySeq !== renderSeq) return; // await 期间用户已切到别的页面
 
   const info = data.episode || {};
   const pc = data.podcast || {};
@@ -910,7 +955,7 @@ async function renderEpisode(id: string): Promise<void> {
   ep.loop = false;
 
   // 恢复偏好
-  const prefs: Partial<EpPrefs> = loadEpPrefs(id) || {};
+  const prefs: Partial<EpPrefs> = loadEpPrefsCached(id) || {};
   const rate = prefs.rate;
   ep.rate = typeof rate === 'number' && SPEEDS.includes(rate) ? rate : 1;
   const mode = prefs.mode;
@@ -1111,6 +1156,8 @@ async function renderEpisode(id: string): Promise<void> {
       setActive(idx, true);
     }
   }
+
+  focusHeading();
 }
 
 /* ---------- 播放器 ---------- */
@@ -1121,6 +1168,7 @@ function setupPlayer(audioSrc: string, prefs: Partial<EpPrefs>, fallbackSrc: str
   ep.audio = audio;
   // 远程源失败时回退本地文件（每次进详情页只回退一次，切期自然重置）
   let triedFallback = false;
+  let usedFallback = false; // 切到兜底源后置 true，原 loadedmetadata 的进度恢复让位
 
   const playBtn = mustGet('#playBtn');
   const playIcon = mustGet('#playIcon');
@@ -1165,10 +1213,11 @@ function setupPlayer(audioSrc: string, prefs: Partial<EpPrefs>, fallbackSrc: str
   }
   ep.togglePlay = togglePlay;
 
-  audio.addEventListener('play', refreshPlayIcon);
+  audio.addEventListener('play', () => { refreshPlayIcon(); startRaf(); });
   audio.addEventListener('pause', () => { refreshPlayIcon(); saveEpPrefs(); });
   audio.addEventListener('loadedmetadata', () => {
     durTimeEl.textContent = fmtTime(duration());
+    if (usedFallback) return; // 兜底源的定位/续播由 error 处理器自己负责
     if (prefs && typeof prefs.t === 'number' && prefs.t > 0 && prefs.t < duration() - 5) {
       audio.currentTime = prefs.t;
       updateProgressUI(prefs.t);
@@ -1181,25 +1230,38 @@ function setupPlayer(audioSrc: string, prefs: Partial<EpPrefs>, fallbackSrc: str
     if (!audio.src) return;
     if (!triedFallback && fallbackSrc && audioSrc !== fallbackSrc) {
       triedFallback = true;
+      usedFallback = true;
+      // 用实时播放位置续播（不是进页时的 prefs 快照），并尽量恢复播放状态
+      const resumeAt = audio.currentTime || (typeof prefs.t === 'number' ? prefs.t : 0);
+      const wasPlaying = !audio.paused;
       audio.src = fallbackSrc;
       audio.load();
+      const onMeta = () => {
+        audio.removeEventListener('loadedmetadata', onMeta);
+        if (resumeAt > 0 && (!isFinite(audio.duration) || resumeAt < audio.duration - 5)) {
+          audio.currentTime = resumeAt;
+        }
+        if (wasPlaying) audio.play().catch(() => {});
+        toast('自建源不可用，已切换备用音源');
+      };
+      audio.addEventListener('loadedmetadata', onMeta);
       return;
     }
     toast('音频加载失败，可仅阅读文本');
   });
   audio.addEventListener('ended', () => { setLoop(false); });
 
-  // 进度更新：timeupdate + rAF 双保险，保证拖拽顺滑
-  function onTick(): void {
-    if (!ep.seeking) updateProgressUI(audio.currentTime);
-    handlePosition(audio.currentTime);
-  }
-  audio.addEventListener('timeupdate', onTick);
-  function rafLoop(): void {
-    if (!audio.paused && !ep.seeking) updateProgressUI(audio.currentTime);
+  // 进度更新：timeupdate + rAF 双保险，保证拖拽顺滑。
+  // 暂停时 rAF 停转（play 事件重启），不再 60fps 空转
+  function startRaf(): void {
+    if (ep.rafId) return;
     ep.rafId = requestAnimationFrame(rafLoop);
   }
-  ep.rafId = requestAnimationFrame(rafLoop);
+  function rafLoop(): void {
+    if (audio.paused) { ep.rafId = 0; return; }
+    if (!ep.seeking) updateProgressUI(audio.currentTime);
+    ep.rafId = requestAnimationFrame(rafLoop);
+  }
 
   // 播放进度记忆（每 5 秒）
   ep.saveTimer = setInterval(() => { if (!audio.paused) saveEpPrefs(); }, 5000);
@@ -1224,6 +1286,8 @@ function setupPlayer(audioSrc: string, prefs: Partial<EpPrefs>, fallbackSrc: str
     ep.seeking = false;
     pbarHit.classList.remove('seeking');
     audio.currentTime = posToTime(e.clientX);
+    // 拖动即视为重新定位：退出单句循环，否则新位置立刻被拉回旧句句首
+    if (ep.loop) setLoop(false);
     handlePosition(audio.currentTime);
   });
 
@@ -1258,12 +1322,15 @@ function setupPlayer(audioSrc: string, prefs: Partial<EpPrefs>, fallbackSrc: str
     saveEpPrefs();
   }
 
-  // 音量
-  volRange.addEventListener('input', () => { audio.volume = parseFloat(volRange.value); });
+  // 音量：全局记忆（localStorage），不跟单集 prefs
+  const savedVol = parseFloat(localStorage.getItem(VOLUME_KEY) || '');
   ep.setVolume = v => {
     audio.volume = Math.min(1, Math.max(0, v));
     volRange.value = String(audio.volume);
+    try { localStorage.setItem(VOLUME_KEY, String(audio.volume)); } catch { /* 忽略 */ }
   };
+  if (!isNaN(savedVol)) ep.setVolume(savedVol);
+  volRange.addEventListener('input', () => ep.setVolume(parseFloat(volRange.value)));
 }
 
 /* ---------- 句子定位 / 高亮 / 循环 ---------- */
@@ -1334,8 +1401,8 @@ function setActive(i: number, scroll: boolean): void {
 }
 
 function handlePosition(t: number): void {
-  // 单句循环：到达句尾就跳回句首
-  if (ep.loop && ep.activeIdx >= 0 && ep.pairs[ep.activeIdx]) {
+  // 单句循环：到达句尾就跳回句首（拖动进度条期间不回跳，否则永远拖不出句外）
+  if (ep.loop && !ep.seeking && ep.activeIdx >= 0 && ep.pairs[ep.activeIdx]) {
     const p = ep.pairs[ep.activeIdx];
     const end = p.end != null ? p.end : Infinity;
     if (t >= end - 0.06 || t < p.start - 0.5) {
@@ -1347,12 +1414,24 @@ function handlePosition(t: number): void {
   if (idx >= 0) setActive(idx, true);
 }
 
+/* 循环徽标只切换上一处与当前处：600 句的列表全表 toggle + 逐个 querySelector 很贵 */
+let loopedEl: HTMLElement | null = null;
 function syncLoopBadge(): void {
-  ep.pairEls.forEach((el, k) => {
-    el.classList.toggle('looping', ep.loop && k === ep.activeIdx);
-    const btn = el.querySelector<HTMLElement>('.pa-btn[data-act="loop"]');
-    if (btn) btn.classList.toggle('on', ep.loop && k === ep.activeIdx);
-  });
+  if (loopedEl) {
+    loopedEl.classList.remove('looping');
+    const prevBtn = loopedEl.querySelector<HTMLElement>('.pa-btn[data-act="loop"]');
+    if (prevBtn) prevBtn.classList.remove('on');
+    loopedEl = null;
+  }
+  if (ep.loop && ep.activeIdx >= 0) {
+    const el = ep.pairEls[ep.activeIdx];
+    if (el) {
+      el.classList.add('looping');
+      const btn = el.querySelector<HTMLElement>('.pa-btn[data-act="loop"]');
+      if (btn) btn.classList.add('on');
+      loopedEl = el;
+    }
+  }
 }
 
 function setLoop(on: boolean): void {
@@ -1462,26 +1541,27 @@ function setupToolbar(): void {
 }
 
 /* ---------- 句子列表 ---------- */
+/* 事件委托：一条监听器管全部句子的点击（原来每句挂 3 个监听器，600 句 ≈ 1800 个） */
 function setupList(): void {
   ep.pairEls = Array.from(document.querySelectorAll<HTMLElement>('.pair'));
-  ep.pairEls.forEach(el => {
-    el.addEventListener('click', () => {
-      const idx = Number(el.dataset.i);
-      if (Number.isNaN(idx)) return;
-      gotoSentence(idx, true);
-    });
-    el.querySelectorAll<HTMLElement>('.pa-btn').forEach(btn => {
-      btn.addEventListener('click', e => {
-        e.stopPropagation();
-        const idx = Number(el.dataset.i);
-        if (Number.isNaN(idx)) return;
-        if (btn.dataset.act === 'loop') {
-          loopThisSentence(idx);
-        } else if (btn.dataset.act === 'copy') {
-          copyText(ep.pairs[idx].en || '').then(() => toast('已复制英文'));
-        }
-      });
-    });
+  loopedEl = null;
+  const list = $('#list');
+  if (!list) return;
+  list.addEventListener('click', e => {
+    const target = e.target as HTMLElement;
+    const pairEl = target.closest<HTMLElement>('.pair');
+    if (!pairEl) return;
+    const idx = Number(pairEl.dataset.i);
+    if (Number.isNaN(idx)) return;
+    const btn = target.closest<HTMLElement>('.pa-btn');
+    if (btn) {
+      if (btn.dataset.act === 'loop') loopThisSentence(idx);
+      else if (btn.dataset.act === 'copy') {
+        copyText((ep.pairs[idx] || { en: '' }).en).then(() => toast('已复制英文'));
+      }
+      return;
+    }
+    gotoSentence(idx, true);
   });
 }
 
@@ -1492,8 +1572,15 @@ modal.addEventListener('click', e => { if (e.target === modal) modal.classList.r
 
 /* ================= 键盘快捷键 ================= */
 document.addEventListener('keydown', e => {
-  const tag = ((e.target as HTMLElement).tagName || '').toLowerCase();
-  if (tag === 'input' || tag === 'textarea' || (e.target as HTMLElement).isContentEditable) return;
+  const target = e.target as HTMLElement;
+  const tag = (target.tagName || '').toLowerCase();
+  if (tag === 'input' || tag === 'textarea' || target.isContentEditable) return;
+  // 焦点在按钮/链接等可激活元素上时，空格/回车是它自身的激活键，不劫持成播放/暂停
+  if (
+    (e.key === ' ' || e.key === 'Enter') &&
+    (tag === 'button' || tag === 'a' || tag === 'select' ||
+      target.getAttribute('role') === 'link' || target.getAttribute('role') === 'button')
+  ) return;
 
   if (e.key === 'Escape') {
     if (modal.classList.contains('open')) { modal.classList.remove('open'); return; }

@@ -8,6 +8,7 @@
 """
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -41,7 +42,33 @@ def fmt_pub_date(rfc822):
 
 def slugify(s):
     s = re.sub(r"[^a-z0-9]+", "-", s.lower()).strip("-")
-    return s[:50] or "episode"
+    return s[:50]
+
+
+def episode_slug(ep):
+    """单集标题 → 目录名。目录名同时是 D1 episodes 表主键，必须保证不同集不重名：
+    - 非拉丁标题（中文/日文等）整句被清空 → 用 pub_date + 音频 URL hash 兜底
+    - 与已有目录同名但 meta 里音频 URL 不同（不同集撞名）→ 加 hash 后缀区分
+    - 目录已存在且是同一集（或无 meta 的半途目录）→ 原样返回（断点续下/重跑）
+    """
+    slug = slugify(ep["title"])
+    if slug:
+        ep_dir = os.path.join(EPISODES_ROOT, slug)
+        meta_path = os.path.join(ep_dir, "meta.json")
+        if not os.path.isdir(ep_dir) or not os.path.exists(meta_path):
+            return slug
+        try:
+            with open(meta_path, encoding="utf-8") as f:
+                same = json.load(f).get("episode", {}).get("audio_url") == ep["audio_url"]
+        except (OSError, json.JSONDecodeError):
+            same = False
+        if same:
+            return slug
+        h = hashlib.sha1(ep["audio_url"].encode("utf-8")).hexdigest()[:8]
+        return f"{slug}-{h}"
+    h = hashlib.sha1(ep["audio_url"].encode("utf-8")).hexdigest()[:8]
+    date = (ep.get("pub_date") or "").replace("/", "-")
+    return f"{slugify(date) or 'episode'}-{h}"
 
 
 def http_download_with_resume(url, dest, timeout=300):
@@ -208,15 +235,38 @@ def fetch_rss(rss_url):
 # 理由见 docs/音频存储方案.md：体积砍半、全浏览器可播、.mp4 扩展名让 Cloudflare 默认缓存。
 
 
+def is_valid_media(path):
+    """ffprobe 校验是否为可解码的音频（能读到时长）。
+
+    上次压缩被中断会留下无 moov atom 的半截文件，仅凭"存在且非空"会误判有效。
+    """
+    try:
+        r = subprocess.run(
+            [
+                "ffprobe", "-v", "error", "-show_entries", "format=duration",
+                "-of", "default=noprint_wrappers=1:nokey=1", str(path),
+            ],
+            capture_output=True, text=True, timeout=60,
+        )
+        if r.returncode != 0:
+            return False
+        return float((r.stdout or "").strip() or 0) > 0
+    except (OSError, ValueError, subprocess.TimeoutExpired):
+        return False
+
+
 def compress_audio(src_path, audio_dir, keep_original=False):
     """把下载的原始音频压成 audio/episode.mp4（AAC-LC 64kbps 单声道）。
-    返回压缩后的路径。幂等：已是 episode.mp4 则直接返回。"""
+    返回压缩后的路径。幂等：已是有效的 episode.mp4 则直接返回。"""
     compressed = os.path.join(audio_dir, "episode.mp4")
     if os.path.abspath(src_path) == os.path.abspath(compressed):
         return src_path
     if os.path.exists(compressed) and os.path.getsize(compressed) > 0:
-        print(f"  ⏭️ 已有压缩音频（{os.path.getsize(compressed) / 1e6:.1f} MB），跳过压缩")
-        return compressed
+        if is_valid_media(compressed):
+            print(f"  ⏭️ 已有压缩音频（{os.path.getsize(compressed) / 1e6:.1f} MB），跳过压缩")
+            return compressed
+        print("  ⚠️ 已有 episode.mp4 损坏（可能上次压缩中断），重新压缩", file=sys.stderr)
+        os.remove(compressed)
     print("  压缩：AAC-LC 64kbps mono → episode.mp4 …")
     r = subprocess.run(
         [
@@ -277,7 +327,7 @@ def download_episode(src, index, keep_original=False):
     if not ep["audio_url"]:
         sys.exit(f"第 {index} 集没有音频链接（可能是 RSS 不提供 enclosure）")
 
-    slug = slugify(ep["title"])
+    slug = episode_slug(ep)
     ep_dir = os.path.join(EPISODES_ROOT, slug)
     audio_dir = os.path.join(ep_dir, "audio")
     os.makedirs(audio_dir, exist_ok=True)
@@ -376,7 +426,9 @@ def main():
         )
     elif args.episodes:
         if args.index:
-            download_episode(args.episodes, args.index, keep_original=args.keep_original)
+            ep_dir = download_episode(args.episodes, args.index, keep_original=args.keep_original)
+            # 机器可读标记行：run_pipeline.py 解析它定位本期目录（比目录 mtime 猜测可靠）
+            print(f"EP_DIR={ep_dir}")
         else:
             list_episodes(args.episodes)
     else:

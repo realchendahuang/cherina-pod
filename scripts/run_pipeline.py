@@ -38,21 +38,26 @@ def main():
         if not args.index:
             print("--fetch 需要配合 --index 指定下载第几集", file=sys.stderr)
             return 2
-        if run("fetch_podcast.py", "--episodes", args.fetch, "--index", args.index):
-            return 1
-        # 从最新生成的 episodes 目录找（fetch 会打印 meta.json 路径）
-        ep = None
-        from glob import glob
-
-        cands = sorted(
-            (HERE.parent / "episodes").glob("*/meta.json"),
-            key=lambda p: p.stat().st_mtime,
-            reverse=True,
+        # 捕获输出以解析 fetch 打印的 EP_DIR= 标记行（比"最新 mtime 的目录"可靠）
+        proc = subprocess.run(
+            [
+                sys.executable, str(HERE / "fetch_podcast.py"),
+                "--episodes", args.fetch, "--index", str(args.index),
+            ],
+            capture_output=True, text=True,
         )
-        if cands:
-            ep = cands[0].parent
-        if ep is None:
-            print("下载后找不到期目录", file=sys.stderr)
+        # 回显输出（\r 进度条转成多行）
+        sys.stdout.write((proc.stdout or "").replace("\r", "\n"))
+        sys.stderr.write(proc.stderr or "")
+        if proc.returncode:
+            return 1
+        ep = None
+        for line in reversed((proc.stdout or "").splitlines()):
+            if line.startswith("EP_DIR="):
+                ep = Path(line.split("=", 1)[1].strip())
+                break
+        if ep is None or not ep.exists():
+            print("下载成功但未解析到期目录（EP_DIR 标记缺失）", file=sys.stderr)
             return 1
         print(f"\n📁 本期目录：{ep}")
     else:
@@ -72,8 +77,13 @@ def main():
     if not args.skip_translate:
         if run("translate.py", ep):
             return 1
-    # 3b. 标题中译（幂等：已有 title_zh 的期会跳过）
-    run("translate_titles.py")
+    # 3b. 标题中译（幂等：已有 title_zh 的期会跳过）。失败不阻断主流程，
+    # 但必须显式提示——静默失败会让线上标题缺中文
+    if run("translate_titles.py"):
+        print(
+            "⚠️ 标题中译失败，本期标题暂为英文（稍后可单独重跑 translate_titles.py 后再对齐）",
+            file=sys.stderr,
+        )
     # 4. 对齐
     if run("align.py", ep):
         return 1

@@ -147,6 +147,42 @@ def s3_client_from_env():
     return S3Client(endpoints[0], ak, sk, bucket, fallbacks=endpoints[1:])
 
 
+def upload_all(s3):
+    """并发上传所有未同步的压缩音频。返回 (成功数, 跳过数, 失败列表)。"""
+    from concurrent.futures import ThreadPoolExecutor
+
+    jobs = []
+    for ep_dir in sorted(EPISODES.iterdir()):
+        if not ep_dir.is_dir():
+            continue
+        src = ep_dir / "audio" / "episode.mp4"
+        if src.exists():
+            jobs.append((f"{ep_dir.name}.mp4", src))
+    if not jobs:
+        print("✅ 没有需要上传的音频")
+        return 0, 0, []
+
+    def work(job):
+        key, src = job
+        if s3.exists(key):
+            return "skip", key
+        print(f"  上传 {key}（{src.stat().st_size / 1e6:.1f} MB）…")
+        return ("ok" if s3.put(key, src, "audio/mp4") else "fail"), key
+
+    up, skip, failed = 0, 0, []
+    with ThreadPoolExecutor(max_workers=4) as ex:
+        for status, key in ex.map(work, jobs):
+            if status == "ok":
+                up += 1
+            elif status == "skip":
+                skip += 1
+            else:
+                failed.append(key)
+                print(f"  ❌ 上传失败：{key}", file=sys.stderr)
+    print(f"✅ 音频上传完成：新传 {up} 个，已存在跳过 {skip} 个，失败 {len(failed)} 个")
+    return up, skip, failed
+
+
 def main():
     load_env()
 
@@ -156,24 +192,16 @@ def main():
     # 压缩音频（audio/episode.mp4，AAC 64k mono）→ RustFS，对象键 <episode_id>.mp4
     s3 = s3_client_from_env()
     if s3:
-        up, skip = 0, 0
-        for ep_dir in sorted(EPISODES.iterdir()):
-            if not ep_dir.is_dir():
-                continue
-            src = ep_dir / "audio" / "episode.mp4"
-            if not src.exists():
-                continue
-            key = f"{ep_dir.name}.mp4"
-            if s3.exists(key):
-                skip += 1
-                continue
-            size_mb = src.stat().st_size / 1e6
-            print(f"  上传 {key}（{size_mb:.1f} MB）…")
-            if s3.put(key, src, "audio/mp4"):
-                up += 1
-            else:
-                print(f"  ❌ 上传失败：{key}", file=sys.stderr)
-        print(f"✅ 音频上传完成：新传 {up} 个，已存在跳过 {skip} 个")
+        _, _, failed = upload_all(s3)
+        if failed:
+            # 上传失败必须让部署感知：deploy_web.sh 有 set -e，静默返回 0 会把
+            # 缺音频的版本直接发布上线
+            print(
+                f"错误：{len(failed)} 个音频上传失败（{', '.join(failed)}），中止部署。"
+                f"重跑本脚本可续传",
+                file=sys.stderr,
+            )
+            return 1
     return 0
 
 

@@ -18,7 +18,12 @@ const CORS = {
 function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
     status,
-    headers: { 'Content-Type': 'application/json; charset=utf-8', ...CORS },
+    headers: {
+      'Content-Type': 'application/json; charset=utf-8',
+      // API 响应显式 no-store：防代理/浏览器启发式缓存住旧数据（搜索、节目列表都要即时）
+      'Cache-Control': 'no-store',
+      ...CORS,
+    },
   });
 }
 
