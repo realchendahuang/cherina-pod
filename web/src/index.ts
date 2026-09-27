@@ -27,8 +27,10 @@ function json(data: unknown, status = 200): Response {
   });
 }
 
-function isEnglishLike(q: string): boolean {
-  return /^[\x20-\x7E]+$/.test(q) && /\s/.test(q.trim());
+// FTS5 只对"有空格分词"的语言有效（英语、西语、日语…）；中文这类无空格语言走 LIKE 兜底。
+// 判断依据是查询串本身而不是站点语言：ASCII + 含空格 → 试 FTS，否则 LIKE。
+function isSpatiallyTokenized(q: string): boolean {
+  return /^[\x20-\x7E]+$/i.test(q) && /\s/.test(q.trim());
 }
 
 interface SearchRow {
@@ -36,10 +38,10 @@ interface SearchRow {
   idx: number;
   start: number;
   end: number;
-  en: string;
-  zh: string;
+  source: string;
+  target: string;
   episode_title: string;
-  episode_title_zh: string;
+  episode_title_target: string;
   podcast: string;
   image: string;
 }
@@ -49,12 +51,12 @@ async function handleSearch(env: Env, url: URL): Promise<Response> {
   if (!q) return json({ count: 0, items: [], query: '' });
   if (q.length > 200) return json({ error: '查询过长' }, 400);
 
-  if (!isEnglishLike(q)) return fallbackLike(env, q);
+  if (!isSpatiallyTokenized(q)) return fallbackLike(env, q);
 
   try {
     const { results } = await env.DB.prepare(`
-      SELECT p.episode_id, p.idx, p.start, p.end, p.en, p.zh,
-             e.episode_title, e.episode_title_zh, e.podcast, e.image
+      SELECT p.episode_id, p.idx, p.start, p.end, p.source, p.target,
+             e.episode_title, e.episode_title_target, e.podcast, e.image
       FROM pairs_fts
       JOIN pairs p ON p.rowid = pairs_fts.rowid
       JOIN episodes e ON e.id = p.episode_id
@@ -72,11 +74,11 @@ async function handleSearch(env: Env, url: URL): Promise<Response> {
 async function fallbackLike(env: Env, q: string): Promise<Response> {
   const like = `%${q}%`;
   const { results } = await env.DB.prepare(`
-    SELECT p.episode_id, p.idx, p.start, p.end, p.en, p.zh,
-           e.episode_title, e.episode_title_zh, e.podcast, e.image
+    SELECT p.episode_id, p.idx, p.start, p.end, p.source, p.target,
+           e.episode_title, e.episode_title_target, e.podcast, e.image
     FROM pairs p
     JOIN episodes e ON e.id = p.episode_id
-    WHERE p.zh LIKE ?1 OR p.en LIKE ?1
+    WHERE p.target LIKE ?1 OR p.source LIKE ?1
     LIMIT 50
   `).bind(like).all<SearchRow>();
   return json({ count: results.length, items: results, query: q });
@@ -85,12 +87,12 @@ async function fallbackLike(env: Env, q: string): Promise<Response> {
 interface EpisodeRow {
   id: string;
   podcast: string;
-  podcast_title_zh: string;
+  podcast_title_target: string;
   author: string;
   category: string;
   level: string;
   episode_title: string;
-  episode_title_zh: string;
+  episode_title_target: string;
   description: string;
   image: string;
   pub_date: string;
@@ -101,20 +103,20 @@ interface EpisodeRow {
 // 发现页 / 频道页：返回 index.json 兼容结构
 async function handleEpisodes(env: Env): Promise<Response> {
   const { results } = await env.DB.prepare(`
-    SELECT id, podcast, podcast_title_zh, author, category, level,
-           episode_title, episode_title_zh, description, image,
+    SELECT id, podcast, podcast_title_target, author, category, level,
+           episode_title, episode_title_target, description, image,
            pub_date, duration, pairs_count
     FROM episodes ORDER BY pub_date DESC
   `).all<EpisodeRow>();
   const items = results.map(r => ({
     id: r.id,
     podcast_title: r.podcast,
-    podcast_title_zh: r.podcast_title_zh,
+    podcast_title_target: r.podcast_title_target,
     podcast_author: r.author,
     category: r.category,
     level: r.level,
     episode_title: r.episode_title,
-    episode_title_zh: r.episode_title_zh,
+    episode_title_target: r.episode_title_target,
     description: r.description,
     image: r.image,
     pub_date: r.pub_date,
@@ -129,45 +131,49 @@ interface EpisodeDetailRow {
   podcast: string;
   author: string;
   image: string;
-  podcast_title_zh: string;
+  podcast_title_target: string;
   podcast_image: string;
   episode_title: string;
-  episode_title_zh: string;
+  episode_title_target: string;
   description: string;
   pub_date: string;
   duration: string;
   audio_url: string;
+  source_lang: string;
+  target_lang: string;
 }
 
 interface PairRow {
   start: number;
   end: number;
-  en: string;
-  zh: string;
+  source: string;
+  target: string;
 }
 
-// 详情页：返回 bilingual.json 兼容结构
+// 详情页：返回 bilingual.json 结构（source / target）
 async function handleEpisodeDetail(env: Env, id: string): Promise<Response> {
   const row = await env.DB.prepare('SELECT * FROM episodes WHERE id = ?').bind(id).first<EpisodeDetailRow>();
   if (!row) return json({ error: 'not found' }, 404);
 
   const { results: pairs } = await env.DB.prepare(
-    'SELECT start, end, en, zh FROM pairs WHERE episode_id = ? ORDER BY idx'
+    'SELECT start, end, source, target FROM pairs WHERE episode_id = ? ORDER BY idx'
   ).bind(id).all<PairRow>();
 
   const duration = pairs.length ? Math.max(...pairs.map(p => p.end)) : 0;
 
   return json({
     id: row.id,
+    source_lang: row.source_lang || 'auto',
+    target_lang: row.target_lang || 'zh',
     podcast: {
       title: row.podcast,
       author: row.author,
       image: row.podcast_image,
-      title_zh: row.podcast_title_zh,
+      title_target: row.podcast_title_target,
     },
     episode: {
       title: row.episode_title,
-      title_zh: row.episode_title_zh,
+      title_target: row.episode_title_target,
       description: row.description,
       pub_date: row.pub_date,
       duration: row.duration,
@@ -175,7 +181,7 @@ async function handleEpisodeDetail(env: Env, id: string): Promise<Response> {
       audio_url: row.audio_url,
     },
     duration,
-    pairs: pairs.map(p => ({ en: p.en, zh: p.zh, start: p.start, end: p.end })),
+    pairs: pairs.map(p => ({ source: p.source, target: p.target, start: p.start, end: p.end })),
   });
 }
 

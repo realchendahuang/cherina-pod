@@ -1,9 +1,15 @@
 #!/usr/bin/env python3
 """对齐：合并 meta + transcript + translation → bilingual.json（线上网页数据源）。
 
+输出契约（语言中立）：
+  pairs[].source / pairs[].target —— 源文 / 译文
+  顶层 source_lang / target_lang
+  podcast.title_target / episode.title_target —— 标题译文
+读入兼容：旧 translation.json（{en, zh}）与旧 meta.json（title_zh）仍可用。
+
 用法：
   python3 scripts/align.py <episode_dir>
-  输出 <episode_dir>/bilingual.json
+  python3 scripts/align.py <episode_dir> --source-lang zh --target-lang en
 """
 
 import argparse
@@ -25,6 +31,16 @@ def main():
         action="store_true",
         help="有缺译文时仍生成文件并以退出码 0 结束（调试用）",
     )
+    ap.add_argument(
+        "--source-lang",
+        default="auto",
+        help="源语言标签，写入 bilingual.json（默认 auto）",
+    )
+    ap.add_argument(
+        "--target-lang",
+        default="zh",
+        help="目标语言标签，写入 bilingual.json（默认 zh）",
+    )
     args = ap.parse_args()
     ep_dir = Path(args.episode_dir).resolve()
     meta_path = ep_dir / "meta.json"
@@ -42,9 +58,12 @@ def main():
     # 以 transcript 句子为准（时间戳权威），按文本从翻译结果取译文。
     # 并发翻译/断点续跑会产生冗余条目（旧时间戳、重复文本），以 transcript 为骨架可全部规避。
     # 匹配键去掉全部空白：ASR 偶发缺空格（如 "hegrown up"），LLM 译文会修正，精确匹配会漏。
-    zh_by_text = {}
+    tgt_by_text = {}
     for t in translation:
-        zh_by_text.setdefault(norm_text(t["en"]), t["zh"])
+        # 旧 translation.json 是 {en, zh}，这里都认
+        src_text = t.get("source", t.get("en", ""))
+        tgt_text = t.get("target", t.get("zh", ""))
+        tgt_by_text.setdefault(norm_text(src_text), tgt_text)
 
     pairs = []
     missing = 0
@@ -56,14 +75,14 @@ def main():
         if key in seen_texts:
             dup_texts += 1
         seen_texts.add(key)
-        zh = zh_by_text.get(key)
-        if zh is None:
+        tgt = tgt_by_text.get(key)
+        if tgt is None:
             missing += 1
-            zh = ""
+            tgt = ""
         pairs.append(
             {
-                "en": text,
-                "zh": zh,
+                "source": text,
+                "target": tgt,
                 "start": s["start"],
                 "end": s["end"],
             }
@@ -78,25 +97,29 @@ def main():
             )
 
     pc = meta["podcast"]
+    ep = meta["episode"]
     bilingual = {
         "id": ep_dir.name,  # 目录名作为唯一 id（网页 ?id= 定位）
+        "source_lang": args.source_lang,
+        "target_lang": args.target_lang,
         # podcast 只保留前端/索引用到的字段，不复制 description/feed_url/link 等冗余
         "podcast": {
             "title": pc.get("title", ""),
             "author": pc.get("author", ""),
             "image": pc.get("image", ""),
-            "title_zh": pc.get("title_zh", ""),
+            "title_target": pc.get("title_target", pc.get("title_zh", "")),
         },
         "episode": {
-            "title": meta["episode"]["title"],
-            "title_zh": meta["episode"].get("title_zh", ""),
-            "description": meta["episode"]["description"],
-            "pub_date": meta["episode"]["pub_date"],
-            "duration": meta["episode"]["duration"],
-            "image": meta["episode"]["image"],
-            "audio_url": meta["episode"]["audio_url"],
+            "title": ep.get("title", ""),
+            "title_target": ep.get("title_target", ep.get("title_zh", "")),
+            "description": ep.get("description", ""),
+            "pub_date": ep.get("pub_date", ""),
+            "duration": ep.get("duration", ""),
+            "image": ep.get("image", ""),
+            "audio_url": ep.get("audio_url", ""),
         },
-        "audio": meta["audio_path"],
+        # 音频不是契约必需项：纯样例/手工条目可以没有，走 .get 兜底
+        "audio": meta.get("audio_path", ""),
         "duration": transcript.get("duration", 0),
         "pairs": pairs,
         "generated_at": datetime.datetime.now().isoformat(timespec="seconds"),

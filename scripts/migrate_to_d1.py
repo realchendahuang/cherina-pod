@@ -43,19 +43,21 @@ DROP TABLE IF EXISTS episodes;
 CREATE TABLE episodes (
   id TEXT PRIMARY KEY,
   podcast TEXT,
-  podcast_title_zh TEXT,
+  podcast_title_target TEXT,
   author TEXT,
   category TEXT,
   level TEXT,
   episode_title TEXT,
-  episode_title_zh TEXT,
+  episode_title_target TEXT,
   description TEXT,
   image TEXT,
   podcast_image TEXT,
   pub_date TEXT,
   duration TEXT,
   pairs_count INTEGER,
-  audio_url TEXT
+  audio_url TEXT,
+  source_lang TEXT,
+  target_lang TEXT
 );
 
 CREATE TABLE pairs (
@@ -63,30 +65,31 @@ CREATE TABLE pairs (
   idx INTEGER NOT NULL,
   start REAL,
   end REAL,
-  en TEXT,
-  zh TEXT,
+  source TEXT,
+  target TEXT,
   PRIMARY KEY (episode_id, idx)
 );
 
--- 英文走 unicode61 分词；中文无空格，本表只做英文全文检索，
--- 中文搜索在 Worker 层用 LIKE 兜底（2 万句级毫秒，规模大了再升级 trigram）。
+-- source 走 unicode61 分词（有空格的语言：英语、西语、日语…）；
+-- target 对中文这类无空格语言分词无效，Worker 层用 LIKE 兜底
+-- （2 万句级毫秒，规模大了再升级 trigram）。
 -- content='pairs' 外部内容表：正文只存 pairs 一份，FTS 只存倒排索引。
 -- 必须配触发器同步，否则直接 INSERT INTO pairs 不会填充 FTS 索引。
 CREATE VIRTUAL TABLE pairs_fts USING fts5(
-  en, zh,
+  source, target,
   content='pairs', content_rowid='rowid',
   tokenize='unicode61'
 );
 
 CREATE TRIGGER pairs_ai AFTER INSERT ON pairs BEGIN
-  INSERT INTO pairs_fts(rowid, en, zh) VALUES (new.rowid, new.en, new.zh);
+  INSERT INTO pairs_fts(rowid, source, target) VALUES (new.rowid, new.source, new.target);
 END;
 CREATE TRIGGER pairs_ad AFTER DELETE ON pairs BEGIN
-  INSERT INTO pairs_fts(pairs_fts, rowid, en, zh) VALUES ('delete', old.rowid, old.en, old.zh);
+  INSERT INTO pairs_fts(pairs_fts, rowid, source, target) VALUES ('delete', old.rowid, old.source, old.target);
 END;
 CREATE TRIGGER pairs_au AFTER UPDATE ON pairs BEGIN
-  INSERT INTO pairs_fts(pairs_fts, rowid, en, zh) VALUES ('delete', old.rowid, old.en, old.zh);
-  INSERT INTO pairs_fts(rowid, en, zh) VALUES (new.rowid, new.en, new.zh);
+  INSERT INTO pairs_fts(pairs_fts, rowid, source, target) VALUES ('delete', old.rowid, old.source, old.target);
+  INSERT INTO pairs_fts(rowid, source, target) VALUES (new.rowid, new.source, new.target);
 END;
 """
 
@@ -112,7 +115,7 @@ def main() -> int:
     part = 1
     pairs_batch = []
     pairs_out = MIGRATIONS / f"0003_pairs_part{part:03d}.sql"
-    pairs_header = "INSERT INTO pairs (episode_id, idx, start, end, en, zh) VALUES\n"
+    pairs_header = "INSERT INTO pairs (episode_id, idx, start, end, source, target) VALUES\n"
 
     def flush_pairs():
         nonlocal pairs_batch, part, pairs_out
@@ -140,6 +143,12 @@ def main() -> int:
         level = pm.get("level", "intermediate")
 
         image = ep.get("image") or pc.get("image", "")
+        # 旧 bilingual.json 用 title_zh / en / zh，这里都兼容读
+        pc_title_t = pc.get("title_target", pc.get("title_zh", ""))
+        ep_title_t = ep.get("title_target", ep.get("title_zh", ""))
+        # 语言对：旧文件没有这两个字段，按历史默认（英→中）补
+        src_lang = data.get("source_lang") or "auto"
+        tgt_lang = data.get("target_lang") or "zh"
         ep_rows.append(
             "("
             + ", ".join(
@@ -147,12 +156,12 @@ def main() -> int:
                 for v in (
                     ep_id,
                     podcast_name,
-                    pc.get("title_zh", ""),
+                    pc_title_t,
                     pc.get("author", ""),
                     category,
                     level,
                     ep.get("title", ""),
-                    ep.get("title_zh", ""),
+                    ep_title_t,
                     ep.get("description", ""),
                     image,
                     pc.get("image", ""),
@@ -161,13 +170,16 @@ def main() -> int:
                 )
             )
             + f", {len(pairs)}, '{esc(ep.get('audio_url', ''))}'"
+            + f", '{esc(src_lang)}', '{esc(tgt_lang)}'"
             + ")"
         )
 
         for i, p in enumerate(pairs):
             pairs_batch.append(
                 f"('{esc(ep_id)}', {i}, {float(p.get('start', 0))!r}, "
-                f"{float(p.get('end', 0))!r}, '{esc(p.get('en', ''))}', '{esc(p.get('zh', ''))}')"
+                f"{float(p.get('end', 0))!r}, "
+                f"'{esc(p.get('source', p.get('en', '')))}', "
+                f"'{esc(p.get('target', p.get('zh', '')))}')"
             )
             n_pairs += 1
             if len(pairs_batch) >= BATCH:
@@ -177,9 +189,9 @@ def main() -> int:
     if ep_rows:
         episodes_sql = (
             "INSERT INTO episodes ("
-            "id, podcast, podcast_title_zh, author, category, level, "
-            "episode_title, episode_title_zh, description, image, podcast_image, pub_date, "
-            "duration, pairs_count, audio_url"
+            "id, podcast, podcast_title_target, author, category, level, "
+            "episode_title, episode_title_target, description, image, podcast_image, pub_date, "
+            "duration, pairs_count, audio_url, source_lang, target_lang"
             ") VALUES\n" + ",\n".join(ep_rows) + ";"
         )
     else:

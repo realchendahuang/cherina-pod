@@ -23,7 +23,8 @@
 - **转写必须保留词级时间戳**，这是逐句对齐的基础，任何环节不得丢弃
 - **跑出来的内容不入库**：`episodes/*/` 下的 `transcript.json` / `translation.json` / `bilingual.json` / `meta.json` 全部 gitignore（第三方播客内容 + 你花钱跑出来的数据）。仓库只保留合成样例 `episodes/_sample-intro/`。
   - ⚠️ 代价：词级时间戳的唯一持久层变成**你的本机工作区**，丢了要重新烧钱转写 —— 请自行做私有备份
-- 翻译遵循信达雅原则，逐句输出 JSON `{en, zh}`，与时间戳一一对应（时间戳在 align.py 以 transcript 为准；translation.json 的 en 必须回填 transcript 原文，保证续跑/对齐键稳定）
+- 翻译遵循信达雅原则，逐句输出 JSON `{source, target}`，与时间戳一一对应（时间戳在 align.py 以 transcript 为准；translation.json 的 source 必须回填 transcript 原文，保证续跑/对齐键稳定）
+- **语言对是配置项**：`--source-lang`（默认 auto）/ `--target-lang`（默认 zh）贯穿 translate → align → D1；键名一律 `source`/`target`，不要在任何层新增语言名硬编码。读入兼容旧格式（`en`/`zh`/`title_zh`）
 - 线上展示页 + D1 数据 API，不做转写/翻译；所有 AI 处理都在本地
 - 密钥只放 `.env`（gitignore），绝不上传仓库
 

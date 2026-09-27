@@ -8,7 +8,7 @@ version: 0.2.0
 
 把一期播客变成双语逐句对照的学习材料，全部在本地完成；线上网页只负责展示。
 
-> **语言现状**：底座设计为语言无关，但**当前实现仍是英文 → 简体中文**（转写用 Paraformer 英文模型，翻译 prompt 写死"译成简体中文"，`bilingual.json` 键名为 `en`/`zh`）。处理非英文播客需要先改代码，见仓库 `docs/定位与商业化.md` 第六节的改造清单。
+> **语言对是配置项**：`--source-lang`（默认 `auto`，模型自行识别）/ `--target-lang`（默认 `zh`）。翻译 prompt、`translation.json` / `bilingual.json` 的 `source`/`target` 键、D1 的 source/target 列全部语言中立；读入兼容旧格式 `en`/`zh`。转写侧：`transcript.json` 就是那道 ASR 接口，任何 ASR 产出该结构即可接入。
 
 ## 核心约定（不可违反）
 
@@ -46,13 +46,16 @@ python3 scripts/fetch_podcast.py --episodes 1434243584 --index 3
 # 从下载开始一站式（推荐）：先下载第 3 集，再转写→翻译→对齐
 python3 scripts/run_pipeline.py --fetch <id|rss_url> --index 3
 
+# 指定语言对（默认 auto → zh）
+python3 scripts/run_pipeline.py --fetch <id|rss_url> --index 3 --source-lang zh --target-lang en
+
 # 已有音频：直接跑流水线
 python3 scripts/run_pipeline.py episodes/<slug>
 ```
 - `transcribe.py`：阿里云 Paraformer 转写 → `transcript.json`（句级 + 词级时间戳，秒）
   - **缓存跳过**：已有 `transcript.json` 自动跳过（避免重复烧钱），`--force` 强制重转写
   - 轮询指数退避（3s → 20s 上限）
-- `translate.py`：LLM 信达雅翻译 → `translation.json`（逐句 `{en, zh}`）
+- `translate.py`：LLM 信达雅翻译 → `translation.json`（逐句 `{source, target}`）
 - `align.py`：合并元数据 → `bilingual.json`（下游唯一数据源）
 
 断点续跑：
@@ -74,9 +77,9 @@ bash scripts/deploy_web.sh
 
 数据流是单向的：`bilingual.json`（本地原料）→ `migrate_to_d1.py` → D1。线上没有静态 JSON 副本，详情页走 `/api/episodes/:id`。
 
-### Step 5：标题中译（可选，幂等）
+### Step 5：标题翻译（可选，幂等）
 ```bash
-python3 scripts/translate_titles.py
+python3 scripts/translate_titles.py --target-lang zh
 # 然后对相关期重跑 align.py 让 title_zh 进入 bilingual.json
 ```
 

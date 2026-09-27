@@ -11,12 +11,12 @@ interface BeforeInstallPromptEvent extends Event {
 interface EpisodeItem {
   id: string;
   podcast_title?: string;
-  podcast_title_zh?: string;
+  podcast_title_target?: string;
   podcast_author?: string;
   category?: string;
   level?: string;
   episode_title?: string;
-  episode_title_zh?: string;
+  episode_title_target?: string;
   description?: string;
   image?: string;
   pub_date?: string;
@@ -28,7 +28,7 @@ interface EpisodeItem {
 interface Channel {
   key: string;
   name: string;
-  zhAlt: string;
+  tgtAlt: string;
   author: string;
   image: string;
   episodes: EpisodeItem[];
@@ -38,16 +38,16 @@ interface Channel {
 interface Pair {
   start: number;
   end?: number;
-  en: string;
-  zh: string;
+  source: string;
+  target: string;
 }
 
 interface EpisodeDetail {
   id: string;
-  podcast: { title?: string; author?: string; image?: string; title_zh?: string };
+  podcast: { title?: string; author?: string; image?: string; title_target?: string };
   episode: {
     title?: string;
-    title_zh?: string;
+    title_target?: string;
     description?: string;
     pub_date?: string;
     duration?: string;
@@ -61,11 +61,11 @@ interface EpisodeDetail {
 interface SearchResult {
   episode_id: string;
   start: number;
-  en: string;
-  zh: string;
+  source: string;
+  target: string;
   podcast?: string;
   episode_title?: string;
-  episode_title_zh?: string;
+  episode_title_target?: string;
 }
 
 interface EpPrefs {
@@ -247,16 +247,16 @@ async function loadIndex(): Promise<{ count: number; items: EpisodeItem[] }> {
   return data;
 }
 
-/* 播客分组（以英文名做稳定 key；播客名全站只展示英文原名，title_zh 仅留作搜索兼容） */
+/* 播客分组（以原名做稳定 key；播客名全站只展示原名，title_target 仅留作搜索兜底） */
 function groupChannels(items: EpisodeItem[]): Channel[] {
   const map = new Map<string, Channel>();
   for (const it of items) {
-    const key = it.podcast_title || it.podcast_title_zh || '未命名播客';
+    const key = it.podcast_title || it.podcast_title_target || '未命名播客';
     if (!map.has(key)) {
       map.set(key, {
         key,
-        name: it.podcast_title || it.podcast_title_zh || '未命名播客',
-        zhAlt: it.podcast_title_zh || '',
+        name: it.podcast_title || it.podcast_title_target || '未命名播客',
+        tgtAlt: it.podcast_title_target || '',
         author: it.podcast_author || '',
         image: it.image || '',
         episodes: [],
@@ -290,7 +290,7 @@ function backTarget(): string {
   if (prev) return prev;
   if (currentView.name === 'episode') {
     const pc = (ep.data && ep.data.podcast) || {};
-    const key = pc.title || pc.title_zh || '';
+    const key = pc.title || pc.title_target || '';
     return key ? '#/podcast/' + encodeURIComponent(key) : '#/';
   }
   return '#/'; // podcast / discover
@@ -437,7 +437,7 @@ async function renderDiscover(): Promise<void> {
       '@type': 'ListItem',
       position: i + 1,
       url: SITE_URL + '/?id=' + encodeURIComponent(it.id),
-      name: it.episode_title_zh || it.episode_title || '',
+      name: it.episode_title_target || it.episode_title || '',
     })),
   });
 
@@ -540,19 +540,19 @@ function chanCardHtml(g: Channel): string {
 
 /* 发现页 rail 单集小卡 */
 function miniCardHtml(it: EpisodeItem): string {
-  // 标题只出一种语言：有中文用中文，否则英文，不中英混排
-  const main = it.episode_title_zh || it.episode_title || '';
+  // 标题只出一种语言：优先译文，缺译文回退原文，不并排混排
+  const main = it.episode_title_target || it.episode_title || '';
   const levelLabel = { beginner: '入门', intermediate: '进阶', advanced: '高级' }[it.level || ''] || '';
   // 一句话简介：用 D1 已存的完整 description，去 HTML 后截断
   const desc = (it.description || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-  const metaParts = [it.podcast_title || it.podcast_title_zh || ''];
+  const metaParts = [it.podcast_title || it.podcast_title_target || ''];
   if (it.duration) metaParts.push(fmtDuration(it.duration));
   if (levelLabel) metaParts.push(levelLabel);
   return (
     '<div class="mini-card" data-go="ep:' + encodeURIComponent(it.id) + '" tabindex="0" role="link">' +
       '<div class="cover-wrap">' + coverHtml(it.image, 'cover', it.podcast_title) + '</div>' +
       '<div class="body">' +
-        '<div class="t-zh" title="' + escapeHtml(main) + '">' + escapeHtml(main) + '</div>' +
+        '<div class="t-tgt" title="' + escapeHtml(main) + '">' + escapeHtml(main) + '</div>' +
         '<div class="meta">' + metaParts.map(escapeHtml).join(' · ') + '</div>' +
         (desc ? '<div class="desc">' + escapeHtml(desc) + '</div>' : '') +
       '</div>' +
@@ -570,8 +570,8 @@ function continueCardHtml(it: EpisodeItem, prefs: EpPrefs): string {
         (pct > 0 ? '<div class="cont-badge">' + pct + '%</div>' : '') +
       '</div>' +
       '<div class="body">' +
-        '<div class="t-zh">' + escapeHtml(it.episode_title_zh || it.episode_title || '') + '</div>' +
-        '<div class="meta">' + escapeHtml(it.podcast_title || it.podcast_title_zh || '') + '</div>' +
+        '<div class="t-tgt">' + escapeHtml(it.episode_title_target || it.episode_title || '') + '</div>' +
+        '<div class="meta">' + escapeHtml(it.podcast_title || it.podcast_title_target || '') + '</div>' +
         '<div class="cont-bar"><div class="cont-fill" style="width:' + pct + '%"></div></div>' +
         '<div class="cont-note">听到 ' + escapeHtml(fmtTime(prefs.t)) + ' · 继续</div>' +
       '</div>' +
@@ -581,13 +581,13 @@ function continueCardHtml(it: EpisodeItem, prefs: EpPrefs): string {
 
 /* 句子搜索结果行 */
 function sentenceRowHtml(r: SearchResult): string {
-  const main = r.episode_title_zh || r.episode_title || '';
+  const main = r.episode_title_target || r.episode_title || '';
   return (
     '<div class="ep-row" data-go="ep:' + encodeURIComponent(r.episode_id) + '" data-seek="' + (r.start || 0) + '" tabindex="0" role="link">' +
       '<span class="num">' + escapeHtml(fmtTime(r.start)) + '</span>' +
       '<div class="info">' +
-        '<div class="t-zh">' + escapeHtml(r.zh || '') + '</div>' +
-        '<div class="t-en">' + escapeHtml(r.en || '') + '</div>' +
+        '<div class="t-tgt">' + escapeHtml(r.target || '') + '</div>' +
+        '<div class="t-src">' + escapeHtml(r.source || '') + '</div>' +
         '<div class="meta">' + escapeHtml(r.podcast || '') + (main ? ' · ' + escapeHtml(main) : '') + '</div>' +
       '</div>' +
       '<span class="chev">' + CHEV_SVG + '</span>' +
@@ -621,7 +621,7 @@ function renderSentenceHits(query: string, rows: SearchResult[] | null | undefin
   bindNav(sec); // data-seek 由 bindNav 统一处理
 }
 
-/* 句子搜索：英文走 FTS5、中文走 LIKE，D1 不可用时静默降级 */
+/* 句子搜索：有空格分词的语言走 FTS5，无空格语言走 LIKE，D1 不可用时静默降级 */
 let sentenceSearchTimer: ReturnType<typeof setTimeout> | null = null;
 let sentenceSearchSeq = 0;
 function scheduleSentenceSearch(raw: string): void {
@@ -663,13 +663,13 @@ function drawDiscoverSearch(query: string, channels: Channel[], items: EpisodeIt
 
   const chanHits = channels.filter(g =>
     g.name.toLowerCase().includes(query) ||
-    g.zhAlt.toLowerCase().includes(query) ||
+    g.tgtAlt.toLowerCase().includes(query) ||
     (g.author || '').toLowerCase().includes(query));
   const epHits = items.filter(it =>
     (it.episode_title || '').toLowerCase().includes(query) ||
-    (it.episode_title_zh || '').toLowerCase().includes(query) ||
+    (it.episode_title_target || '').toLowerCase().includes(query) ||
     (it.podcast_title || '').toLowerCase().includes(query) ||
-    (it.podcast_title_zh || '').toLowerCase().includes(query) ||
+    (it.podcast_title_target || '').toLowerCase().includes(query) ||
     (it.podcast_author || '').toLowerCase().includes(query));
 
   if (!chanHits.length && !epHits.length) {
@@ -721,7 +721,7 @@ async function renderPodcast(key: string): Promise<void> {
   }
   if (mySeq !== renderSeq) return; // await 期间用户已切到别的页面
   const eps = (data.items || [])
-    .filter(it => (it.podcast_title || it.podcast_title_zh || '未命名播客') === key)
+    .filter(it => (it.podcast_title || it.podcast_title_target || '未命名播客') === key)
     .sort((a, b) => String(b.pub_date || '').localeCompare(String(a.pub_date || '')));
 
   if (!eps.length) {
@@ -756,7 +756,7 @@ async function renderPodcast(key: string): Promise<void> {
       '<div class="pod-cover-wrap">' + coverHtml(g.image, '', g.name) + '</div>' +
       '<div class="pod-info">' +
         '<h1>' + escapeHtml(g.name) + '</h1>' +
-        (g.author && g.author !== g.name && g.author !== g.zhAlt ? '<div class="author">' + escapeHtml(g.author) + '</div>' : '') +
+        (g.author && g.author !== g.name && g.author !== g.tgtAlt ? '<div class="author">' + escapeHtml(g.author) + '</div>' : '') +
         '<div class="pod-stats">' + eps.length + ' 集 · ' + g.pairs + ' 句</div>' +
       '</div>' +
     '</div>' +
@@ -772,9 +772,9 @@ async function renderPodcast(key: string): Promise<void> {
 /* 单集行（频道页 / 搜索结果共用） */
 function epRowHtml(it: EpisodeItem, num: number, showPodcast: boolean): string {
   // 标题只出一种语言（与发现页卡片一致）
-  const main = it.episode_title_zh || it.episode_title || '';
+  const main = it.episode_title_target || it.episode_title || '';
   const metaParts: string[] = [];
-  if (showPodcast) metaParts.push(it.podcast_title || it.podcast_title_zh || '');
+  if (showPodcast) metaParts.push(it.podcast_title || it.podcast_title_target || '');
   if (it.pub_date) metaParts.push(it.pub_date);
   if (it.duration) metaParts.push(fmtDuration(it.duration)); // RSS 原始时长格式不一（秒 / 00:mm:ss），统一格式化
   if (it.pairs_count) metaParts.push(it.pairs_count + ' 句');
@@ -797,7 +797,7 @@ function epRowHtml(it: EpisodeItem, num: number, showPodcast: boolean): string {
       '<span class="num">' + num + '</span>' +
       '<div class="thumb-wrap">' + coverHtml(it.image, 'thumb', main) + '</div>' +
       '<div class="info">' +
-        '<div class="t-zh">' + escapeHtml(main) + '</div>' +
+        '<div class="t-tgt">' + escapeHtml(main) + '</div>' +
         '<div class="meta">' + metaParts.map(escapeHtml).join(' · ') + '</div>' +
         heardHtml +
       '</div>' +
@@ -808,7 +808,7 @@ function epRowHtml(it: EpisodeItem, num: number, showPodcast: boolean): string {
 
 /* ================= 页面 3：详情页（精听学习） ================= */
 const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 2];
-const MODE_ORDER = ['both', 'en', 'zh'];
+const MODE_ORDER = ['both', 'src', 'tgt'];
 
 /* 字幕分段控件按钮（初始 on 态按恢复的偏好渲染） */
 function segBtnHtml(m: string, label: string): string {
@@ -946,7 +946,7 @@ async function renderEpisode(id: string): Promise<void> {
   const info = data.episode || {};
   const pc = data.podcast || {};
   // 标题只出一种语言（与列表卡片一致）
-  const mainTitle = info.title_zh || info.title || '单期';
+  const mainTitle = info.title_target || info.title || '单期';
   // SEO：单集页描述 + 结构化数据（音频 URL 在下方 cdnSrc 定义后补全）
   seoBase(
     mainTitle + ' · Cherina Pod',
@@ -995,8 +995,8 @@ async function renderEpisode(id: string): Promise<void> {
   // 未配置自建源时（AUDIO_CDN 为空）直接用 RSS 外链
   const audioSrc = cdnSrc || (remoteUsable ? remoteSrc : '');
   const audioFallback = remoteUsable && remoteSrc ? remoteSrc : '';
-  // 播客名全站只展示英文原名（无英文名才退回中文）
-  const pcName = pc.title || pc.title_zh || '';
+  // 播客名全站只展示原名（无原名才退回译文）
+  const pcName = pc.title || pc.title_target || '';
   const backHash = '#/podcast/' + encodeURIComponent(pcName);
 
   const descText = (info.description || '').trim();
@@ -1029,8 +1029,8 @@ async function renderEpisode(id: string): Promise<void> {
           /* 字幕分段控件：当前模式直接可见，一键直达（替代原三态循环盲开关） */
           '<div class="seg" role="group" aria-label="字幕显示">' +
             segBtnHtml('both', '双语') +
-            segBtnHtml('en', '英') +
-            segBtnHtml('zh', '中') +
+            segBtnHtml('src', '原文') +
+            segBtnHtml('tgt', '译文') +
           '</div>' +
           '<div class="spacer"></div>' +
           '<div class="settings-wrap">' +
@@ -1074,13 +1074,13 @@ async function renderEpisode(id: string): Promise<void> {
                     '<button class="pa-btn" data-act="loop" title="循环此句" aria-label="循环此句">' +
                       LOOP_SVG +
                     '</button>' +
-                    '<button class="pa-btn" data-act="copy" title="复制英文" aria-label="复制英文">' +
+                    '<button class="pa-btn" data-act="copy" title="复制原文" aria-label="复制原文">' +
                       '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>' +
                     '</button>' +
                   '</div>' +
                   '<span class="time">' + fmtTime(p.start) + '</span>' +
-                  '<div class="en">' + escapeHtml(p.en) + '</div>' +
-                  '<div class="zh">' + escapeHtml(p.zh) + '</div>' +
+                  '<div class="src">' + escapeHtml(p.source) + '</div>' +
+                  '<div class="tgt">' + escapeHtml(p.target) + '</div>' +
                 '</div>'
               ).join('')) +
         '</div>' +
@@ -1399,13 +1399,13 @@ function setActive(i: number, scroll: boolean): void {
       smoothCenterEl(ep.pairEls[i]);
     }
   }
-  // 吸底条正在播放：当前句英文，未定位时回退单集名
+  // 吸底条正在播放：当前句原文，未定位时回退单集名
   const np = $('#npLine');
   if (np && ep.data) {
     const info = ep.data.episode || {};
     np.textContent = i >= 0 && ep.pairs[i]
-      ? (ep.pairs[i].en || '')
-      : (info.title_zh || info.title || '');
+      ? (ep.pairs[i].source || '')
+      : (info.title_target || info.title || '');
   }
 }
 
@@ -1477,7 +1477,7 @@ function setupToolbar(): void {
   // 字幕分段控件：状态可见、一键直达
   const segBtns = Array.from(app.querySelectorAll<HTMLElement>('.seg-btn'));
   const applyMode = () => {
-    app.classList.remove('mode-en', 'mode-zh');
+    app.classList.remove('mode-src', 'mode-tgt');
     if (ep.mode !== 'both') app.classList.add('mode-' + ep.mode);
     segBtns.forEach(b => {
       const on = b.dataset.mode === ep.mode;
@@ -1566,7 +1566,7 @@ function setupList(): void {
     if (btn) {
       if (btn.dataset.act === 'loop') loopThisSentence(idx);
       else if (btn.dataset.act === 'copy') {
-        copyText((ep.pairs[idx] || { en: '' }).en).then(() => toast('已复制英文'));
+        copyText((ep.pairs[idx] || { source: '' }).source).then(() => toast('已复制原文'));
       }
       return;
     }

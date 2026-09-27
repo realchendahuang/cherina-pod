@@ -21,7 +21,7 @@
 1. **无需注册** — 核心功能（采集、转写、翻译、训练）不设账号墙，没有"先登录才能用"。
 2. **数据即文件** — 唯一数据契约是纯 JSON（`transcript.json` / `translation.json` / `bilingual.json`）：没有私有格式、没有数据库锁定，任何时候 `cp` 走就是完整备份，迁移到任何工具链都不损失。
 3. **本地处理** — 转写与翻译在你自己机器（或你自己部署的 Worker）上完成。本项目不托管、不缓存、不转售你的内容。
-4. **语言无关** — 语言对是配置项，不是写死的假设。*现状：整条链路仍是英文 → 简体中文硬编码（转写模型、`translate.py` 的 prompt、JSON 键名 `en`/`zh`、D1 列名），语言无关化是已知改造项，清单见 [定位与商业化](docs/定位与商业化.md)。*
+4. **语言无关** — 语言对是配置项，不是写死的假设。`--source-lang` / `--target-lang` 贯穿全链路（翻译 prompt、JSON 键名、D1 列名都是 `source`/`target`），换语言对不用改数据结构。*转写侧默认走 Paraformer，但 `transcript.json` 就是那道接口——任何 ASR 都能顶替（见下）。*
 
 **扩展点**（付费层预留的地基，现在就可以依赖）：
 
@@ -79,6 +79,9 @@ python3 scripts/fetch_podcast.py --search "Hidden Brain"
 # 一键流水线：下载 → 转写 → 翻译 → 对齐
 python3 scripts/run_pipeline.py --fetch <rss_url> --index 3
 
+# 换目标语言（语言对是配置项：默认 auto → zh）
+python3 scripts/run_pipeline.py --fetch <rss_url> --index 3 --source-lang zh --target-lang en
+
 # 已有音频 / 已转写，续跑
 python3 scripts/run_pipeline.py episodes/<id> --skip-transcribe
 ```
@@ -128,15 +131,38 @@ npx wrangler deploy
 ```json
 {
   "id": "how-feelings-make-us-smarter",
-  "podcast": { "title": "Hidden Brain", "title_zh": "隐藏的大脑", "author": "..." },
-  "episode": { "title": "...", "title_zh": "...", "description": "..." },
+  "source_lang": "en",
+  "target_lang": "zh",
+  "podcast": { "title": "Hidden Brain", "title_target": "隐藏的大脑", "author": "..." },
+  "episode": { "title": "...", "title_target": "...", "description": "..." },
   "duration": 1234.5,
   "pairs": [
-    { "en": "This is Hidden Brain.", "zh": "这里是《隐藏的大脑》。", "start": 0.0, "end": 1.601 }
+    { "source": "This is Hidden Brain.", "target": "这里是《隐藏的大脑》。", "start": 0.0, "end": 1.601 }
   ],
   "generated_at": "2026-08-23T10:00:00Z"
 }
 ```
+
+字段是语言中立的：`source` / `target` 是原文与译文，`*_lang` 记语言对（BCP-47）。换个语言对，结构一个字都不用改。旧格式（`en` / `zh` / `title_zh`）的中间产物仍能被读入，**不需要重跑任何已有数据**。
+
+## 自带 ASR：transcript.json 就是那道接口
+
+`transcript.json` 是转写与流水线其余部分之间的**唯一接口**——翻译、对齐、灌库都只认它的结构，不关心是谁转的。所以换 ASR 不必改任何后续环节，只要产出这个形状：
+
+```json
+{
+  "duration": 21.0,
+  "sentences": [ { "text": "一句原文", "start": 0.0, "end": 1.6 } ],
+  "words":     [ { "word": "词 ", "start": 0.0, "end": 0.28 } ]
+}
+```
+
+- `sentences` 是必需项（逐句对齐靠它），`words` 是词级时间戳（更精细的定位与跟读靠它，强烈建议保留）
+- 任何能输出这个结构的工具都能接进来：`mlx-whisper` / `faster-whisper` / `whisper.cpp` / 云端任意 ASR
+- 换完之后：`python3 scripts/align.py <episode_dir>`（已有译文直接对齐）或 `python3 scripts/translate.py <episode_dir> --target-lang <lang>`（连译文一起重来）
+
+默认的 `transcribe.py` 走阿里云百炼 Paraformer（`DASHSCOPE_API_KEY`），国际站同样可用。
+
 
 **红线**：`transcript.json` 里的 `words`（词级时间戳）是逐句对齐的地基，任何环节不得丢弃。它**不再进仓库**——跑出来的转写和译文是你自己的数据，留在你的工作区即可；代价是**你要自己给它做备份**（丢一次就得重新花钱转写）。
 
@@ -162,8 +188,5 @@ AGPL-3.0，见 [LICENSE](LICENSE)。你的 fork 同样要开源——这是 AGPL
 
 ## 待补
 
-- 语言无关化（`translate.py` 仍为 en→zh 硬编码，改造清单见 [定位与商业化](docs/定位与商业化.md)）
-- 本地 Whisper 转写路径（当前 ASR 依赖阿里云百炼，海外用户无国内云账号就跑不了自部署）
 - Cloudflare 一键部署按钮（Deploy to Cloudflare）
-- 测试与 CI
-- 仓库历史中仍含 21 期第三方播客的 `bilingual.json`，公开前需处理（见 [定位与商业化](docs/定位与商业化.md) 的待决项）
+- 更多的 `podcast_meta.json` 分类 / 难度标注

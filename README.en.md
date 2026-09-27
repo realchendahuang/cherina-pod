@@ -19,7 +19,7 @@ Four promises to anyone who uses this:
 1. **No sign-up** — the core (fetch, transcribe, translate, train) never puts an account wall in front of you.
 2. **Data is files** — the only data format is plain JSON (`transcript.json` / `translation.json` / `bilingual.json`). No proprietary format, no database lock-in: `cp` your directory and you have a complete backup that any other tool can read.
 3. **Processed locally** — transcription and translation run on your machine (or on a Worker you deploy). This project hosts, caches, and resells nothing.
-4. **Language-agnostic** — the language pair is configuration, not an assumption baked into the code. *Current state: the chain is still hardcoded English → Simplified Chinese (ASR model, translation prompt, `en`/`zh` JSON keys, D1 columns). See the localization backlog in `docs/定位与商业化.md`.*
+4. **Language-agnostic** — the language pair is configuration, not an assumption baked into the code. `--source-lang` / `--target-lang` run through the whole chain (translation prompt, JSON keys, D1 columns are all `source` / `target`); switching language pairs changes no data structure. *Transcription defaults to Paraformer, but `transcript.json` is the interface — any ASR can replace it (see below).*
 
 **Extension points** (the seams the paid tier will plug into — you can rely on these now):
 
@@ -75,6 +75,9 @@ Requirements: Python ≥ 3.9, ffmpeg / ffprobe, Node ≥ 20.
 ```bash
 python3 scripts/fetch_podcast.py --search "Hidden Brain"
 python3 scripts/run_pipeline.py --fetch <rss_url> --index 3
+
+# pick a different language pair (default: auto → zh)
+python3 scripts/run_pipeline.py --fetch <rss_url> --index 3 --source-lang zh --target-lang en
 ```
 
 Output lands in `episodes/<id>/`: `transcript.json` (word-level timestamps) → `translation.json` (raw LLM output, gitignored) → `bilingual.json` (the aligned artifact).
@@ -119,24 +122,43 @@ Leaving `AUDIO_CDN` empty makes the player stream from the publisher's RSS — e
 ```json
 {
   "id": "how-feelings-make-us-smarter",
-  "podcast": { "title": "Hidden Brain", "title_zh": "隐藏的大脑", "author": "..." },
-  "episode": { "title": "...", "title_zh": "...", "description": "..." },
+  "source_lang": "en",
+  "target_lang": "zh",
+  "podcast": { "title": "Hidden Brain", "title_target": "隐藏的大脑", "author": "..." },
+  "episode": { "title": "...", "title_target": "...", "description": "..." },
   "duration": 1234.5,
   "pairs": [
-    { "en": "This is Hidden Brain.", "zh": "这里是《隐藏的大脑》。", "start": 0.0, "end": 1.601 }
+    { "source": "This is Hidden Brain.", "target": "这里是《隐藏的大脑》。", "start": 0.0, "end": 1.601 }
   ],
   "generated_at": "2026-08-23T10:00:00Z"
 }
 ```
 
-**Red line**: the `words` array in `transcript.json` is the foundation of every downstream alignment — never drop it, and keep it in version control. Losing it means paying to re-transcribe.
+Field names are language-neutral: `source` / `target` are the original and its translation, `*_lang` records the language pair (BCP-47). Switch pairs and not one character of the structure changes. Files in the old format (`en` / `zh` / `title_zh`) are still read, so **you never have to re-run existing data**.
+
+## Bring your own ASR
+
+`transcript.json` is the **only interface** between transcription and the rest of the pipeline — translation, alignment and the D1 load all read its shape and never care who produced it. So swapping ASR means changing nothing downstream, as long as you output this shape:
+
+```json
+{
+  "duration": 21.0,
+  "sentences": [ { "text": "one sentence", "start": 0.0, "end": 1.6 } ],
+  "words":     [ { "word": "word ", "start": 0.0, "end": 0.28 } ]
+}
+```
+
+- `sentences` is required (alignment is built on it); `words` is word-level timing (finer positioning and shadowing — keep it)
+- Anything that emits this structure works: `mlx-whisper`, `faster-whisper`, `whisper.cpp`, any cloud ASR
+- After swapping: `python3 scripts/align.py <episode_dir>` (reuse existing translations) or `python3 scripts/translate.py <episode_dir> --target-lang <lang>` (retranslate too)
+
+The bundled `transcribe.py` uses Alibaba Cloud Paraformer (`DASHSCOPE_API_KEY`), which is equally available on the international console.
 
 ## Roadmap gaps
 
-- Language-agnosticism (translation is still hardcoded en→zh; the full checklist is in `docs/定位与商业化.md`)
-- Local Whisper transcription, so self-hosting doesn't require a Chinese cloud account
 - One-click "Deploy to Cloudflare" button
 - Tests and CI
+- More `podcast_meta.json` category / level tagging
 
 ## License
 

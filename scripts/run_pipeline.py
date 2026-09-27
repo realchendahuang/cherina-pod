@@ -31,6 +31,16 @@ def main():
         "--skip-transcribe", action="store_true", help="跳过转写（断点续跑）"
     )
     ap.add_argument("--skip-translate", action="store_true", help="跳过翻译（只对齐）")
+    ap.add_argument(
+        "--source-lang",
+        default="auto",
+        help="源语言（BCP-47；默认 auto = 模型识别）",
+    )
+    ap.add_argument(
+        "--target-lang",
+        default="zh",
+        help="目标语言（BCP-47；默认 zh = 简体中文）",
+    )
     args = ap.parse_args()
 
     # 1. 可选：下载
@@ -75,17 +85,17 @@ def main():
             return 1
     # 3. 翻译
     if not args.skip_translate:
-        if run("translate.py", ep):
+        if run("translate.py", ep, "--source-lang", args.source_lang, "--target-lang", args.target_lang):
             return 1
-    # 3b. 标题中译（幂等：已有 title_zh 的期会跳过）。失败不阻断主流程，
-    # 但必须显式提示——静默失败会让线上标题缺中文
-    if run("translate_titles.py"):
+    # 3b. 标题翻译（幂等：已有 title_target / title_zh 的期会跳过）。失败不阻断主流程，
+    # 但必须显式提示——静默失败会让线上标题缺译文
+    if run("translate_titles.py", "--target-lang", args.target_lang):
         print(
-            "⚠️ 标题中译失败，本期标题暂为英文（稍后可单独重跑 translate_titles.py 后再对齐）",
+            "⚠️ 标题翻译失败，本期标题暂为原文（稍后可单独重跑 translate_titles.py 后再对齐）",
             file=sys.stderr,
         )
     # 4. 对齐
-    if run("align.py", ep):
+    if run("align.py", ep, "--source-lang", args.source_lang, "--target-lang", args.target_lang):
         return 1
 
     print("\n🎉 流水线完成！bilingual.json 已就绪。")
