@@ -1,0 +1,20 @@
+{
+  "_synthetic": "本目录是**合成样例**（synthetic fixture），内容为人工编写，不是任何真实播客的转写或翻译。仅用于让新 clone 的仓库能跑通 migrate_to_d1.py / 部署流程。",
+  "podcast": {
+    "title": "Sample Podcast",
+    "title_zh": "示例播客",
+    "author": "cherina-pod (synthetic)",
+    "description": "合成样例数据，用于演示数据契约。",
+    "image": "",
+    "link": "",
+    "feed_url": ""
+  },
+  "episode": {
+    "title": "Sample Episode: What This Fixture Shows",
+    "title_zh": "样例单集：这份数据长什么样",
+    "description": "一段人工编写的双语逐句数据，用来说明 bilingual.json 的结构。",
+    "image": "",
+    "pub_date": "2026-01-01",
+    "duration": "00:00:21"
+  }
+}

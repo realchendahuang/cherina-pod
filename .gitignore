@@ -22,17 +22,33 @@ node_modules/
 .wrangler/
 .dev.vars
 
-# 播客音频与原始译文不入库；transcript.json 必须提交——它是词级时间戳（项目红线）
-# 的唯一持久层（bilingual.json 不含 words），目录误删就只能重新烧钱转写
+# ── 跑出来的内容一律不入库 ─────────────────────────────────────────────
+# 音频体积大（25MiB 上限、且不该由本项目分发）
 episodes/*/audio/
 web/public/episodes/*/audio/
-episodes/*/translation.json
 episodes/*/*.mp3
 episodes/*/*.m4a
 episodes/*/*.wav
+# 原始 LLM 产物（中间态，bilingual.json 才是下游唯一需要的）
+episodes/*/translation.json
+# 第三方播客的转写 / 译文 / 元数据：这些是你花钱跑出来的**你自己**的内容，
+# 属于你的本地数据（底座哲学：数据留在用户机器上），不属于开源仓库。
+# ⚠️ transcript.json 含词级时间戳，是重新转写成本最高的那份数据 ——
+#    它现在只存在于你的工作区，请自行做私有备份（见 README「数据契约」）。
+episodes/*/transcript.json
+episodes/*/bilingual.json
+episodes/*/meta.json
+# 例外：合成样例（人工编写、非真实内容）必须入库，供新 clone 跑通流程。
+# 注意要逐文件反忽略——只反忽略目录不生效（git 不会因目录被重新包含而放行其中的文件）
+!episodes/_sample-intro/bilingual.json
+!episodes/_sample-intro/meta.json
+!episodes/_sample-intro/transcript.json
 
 # D1 迁移 SQL 由 migrate_to_d1.py 生成（每次 deploy 前重建，不提交）
 web/migrations/
+
+# 内部运维材料（ssh 别名、服务器拓扑、运维交接单），不属于开源内容
+private/
 
 # ZCode 会话产物
 .zcode/

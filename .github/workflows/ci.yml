@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# 只做"不会花钱、不会碰外部服务"的检查：前端类型 + 构建、Python 语法。
+# 流水线本身依赖 ASR / LLM key 与真实音频，不在 CI 里跑（也绝不能把密钥带进 CI）。
+jobs:
+  web:
+    name: Web · typecheck + build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: 安装依赖
+        run: npm ci
+
+      - name: 类型检查（app / worker / sw 三份 tsconfig）
+        run: npm run typecheck
+
+      - name: 构建
+        run: npm run build
+
+      - name: 确认构建产物存在
+        run: ls -l public/app.js public/sw.js
+
+  python:
+    name: Scripts · syntax
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: 语法检查（不执行、不联网、不烧 API 额度）
+        run: python -m compileall -q scripts
