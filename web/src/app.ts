@@ -181,9 +181,16 @@ mustGet('#themeBtn').addEventListener('click', () => {
 initTheme();
 
 /* ================= SEO：路由级 title / meta / OG / JSON-LD ================= */
-const SITE_URL = 'https://pod.cherina.app';
-const SITE_NAME = 'Cherina Pod';
-const SITE_DESC = 'Cherina Pod 双语播客精听：中英对照逐句学习，跟读循环、倍速播放，从 BBC、TED、Hidden Brain、99% Invisible 等优质英文播客中提升听力与口语。';
+/* 站点配置由构建时注入（见 build.mjs）：fork 自己的实例时用环境变量覆盖
+   SITE_URL / SITE_NAME / SITE_DESC / AUDIO_CDN，无需改本文件 */
+declare const __SITE_URL__: string;
+declare const __SITE_NAME__: string;
+declare const __SITE_DESC__: string;
+declare const __AUDIO_CDN__: string;
+
+const SITE_URL = __SITE_URL__;
+const SITE_NAME = __SITE_NAME__;
+const SITE_DESC = __SITE_DESC__;
 
 function setMeta(attr: string, key: string, content: string): void {
   let el = document.head.querySelector('meta[' + attr + '="' + key + '"]');
@@ -965,8 +972,8 @@ async function renderEpisode(id: string): Promise<void> {
 
   // 音频：自建源（与转写同一份文件，音文对齐的保证）优先，报错回退 RSS 外链（仅一次）
   // 注意：RSS 外链可能被托管商动态插广告（DAI），只作兜底；http:// 外链在 https 页必被拦，直接不用
-  // AAC-LC 64k mono / MP4 容器 / .mp4；域名用一级子域 pod-audio（见 docs/音频存储方案.md）
-  const cdnSrc = 'https://pod-audio.cherina.app/' + encodeURIComponent(id) + '.mp4';
+  // AAC-LC 64k mono / MP4 容器 / .mp4；前缀由构建时注入（AUDIO_CDN），未配置时留空 → 直接走 RSS 外链
+  const cdnSrc = __AUDIO_CDN__ ? __AUDIO_CDN__ + encodeURIComponent(id) + '.mp4' : '';
   // SEO：PodcastEpisode 结构化数据（含音频直链，供 Google 播客富结果）
   setLdJson({
     '@context': 'https://schema.org',
@@ -984,7 +991,9 @@ async function renderEpisode(id: string): Promise<void> {
   });
   const remoteSrc = info.audio_url || '';
   const remoteUsable = /^https:\/\//i.test(remoteSrc) || location.protocol !== 'https:';
-  const audioSrc = cdnSrc;
+  // 有自建源就优先它（与转写同一份文件，音文对齐的保证），报错回退 RSS 外链（仅一次）；
+  // 未配置自建源时（AUDIO_CDN 为空）直接用 RSS 外链
+  const audioSrc = cdnSrc || (remoteUsable ? remoteSrc : '');
   const audioFallback = remoteUsable && remoteSrc ? remoteSrc : '';
   // 播客名全站只展示英文原名（无英文名才退回中文）
   const pcName = pc.title || pc.title_zh || '';

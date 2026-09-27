@@ -16,6 +16,7 @@ category/level 从 podcast_meta.json 按播客名补齐。
 """
 
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -188,7 +189,8 @@ def main() -> int:
     print(f"✅ pairs 分片：{part - 1} 个文件，共 {n_pairs} 句")
 
     # sitemap.xml：首页 + 每期（?id= 查询串形态，route() 兼容，可被爬虫索引）
-    site = "https://pod.cherina.app"
+    # 站点地址可用环境变量 SITE_URL 覆盖（与 web/build.mjs 同一套配置，fork 后填自己的）
+    site = os.environ.get("SITE_URL") or "https://pod.cherina.app"
     urls = ['  <url><loc>' + site + '/</loc><changefreq>weekly</changefreq><priority>1.0</priority></url>']
     for eid in sorted(ep_ids):
         urls.append(

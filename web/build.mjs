@@ -7,6 +7,23 @@ import { build, context } from 'esbuild';
 
 const watch = process.argv.includes('--watch');
 
+// 站点配置：构建时注入，fork 后用环境变量覆盖即可，不必改源码。
+//   SITE_URL   站点根 URL（canonical / og:url / 结构化数据）
+//   SITE_NAME  站点名
+//   SITE_DESC  站点描述
+//   AUDIO_CDN  自建音频源前缀（**留空 = 只走 RSS 外链**，播放器自动降级）
+// 例：SITE_URL=https://my-pod.pages.dev AUDIO_CDN=https://my-audio.example.com/ npm run build
+// 注意用 `in` 判空而非 `||`：显式传空串要生效（AUDIO_CDN="" 表示"不要自建源"）。
+const envOr = (key, fallback) => (key in process.env ? process.env[key] : fallback);
+
+const siteConfig = {
+  __SITE_URL__: JSON.stringify(envOr('SITE_URL', 'https://pod.cherina.app')),
+  __SITE_NAME__: JSON.stringify(envOr('SITE_NAME', 'Cherina Pod')),
+  __SITE_DESC__: JSON.stringify(envOr('SITE_DESC',
+    'Cherina Pod 双语播客精听：中英对照逐句学习，跟读循环、倍速播放，从 BBC、TED、Hidden Brain、99% Invisible 等优质英文播客中提升听力与口语。')),
+  __AUDIO_CDN__: JSON.stringify(envOr('AUDIO_CDN', 'https://pod-audio.cherina.app/')),
+};
+
 // 生产构建开 minify + sourcemap：包体显著变小；出问题时 .map 可还原排错。
 // watch（本地开发）保持不压缩，便于直接读产物调试。
 const common = {
@@ -15,6 +32,7 @@ const common = {
   sourcemap: !watch,
   target: 'es2022',
   logLevel: 'info',
+  define: siteConfig,
 };
 
 const entries = [

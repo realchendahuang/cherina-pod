@@ -1,12 +1,24 @@
+# Cherina Pod 部署配置
+#
+# ⚠️ Fork 必改（两处）：本文件不含任何作者账号的资源，填你自己的。
+#   1. database_id —— 跑 `npx wrangler d1 create cherina-pod-db`，把返回的 database_id 填到下面
+#   2. custom_domain —— 注释掉整段 routes 即可（默认走 *.workers.dev，无需域名）；
+#                      要绑自己的域名，把 pattern 改成你的、确保该域名在同一个 Cloudflare 账户下
+#
+# 环境变量（构建前端时用，见 build.mjs）：
+#   SITE_URL   站点根 URL        例：https://my-pod.pages.dev
+#   AUDIO_CDN  自建音频源前缀    例：https://my-audio.example.com/   （留空 = 只用 RSS 外链）
+#   SITE_NAME / SITE_DESC 站点名与描述
+
 name = "cherina-pod"
 main = "src/index.ts"
 compatibility_date = "2024-12-01"
 workers_dev = true
 
-# 自定义域名（cherina.app 托管在 Cloudflare，主域名被 cherina-app 占用，用子域名）
-routes = [
-  { pattern = "pod.cherina.app", custom_domain = true }
-]
+# 自定义域名：默认注释（workers.dev 即可用）。要启用，改 pattern 为你自己的域名。
+# routes = [
+#   { pattern = "pod.example.com", custom_domain = true }
+# ]
 
 # 静态资源：public/ 下的文件直接由 Cloudflare 边缘缓存分发
 [assets]
@@ -17,8 +29,9 @@ not_found_handling = "404-page"
 [observability]
 enabled = true
 
-# Cloudflare D1：跨期全文搜索（pairs 逐句 + FTS5）
+# Cloudflare D1：逐句数据 + 全文搜索（pairs 表 + FTS5）
+# database_id 必须是**你自己账户**里的库，见文件头说明
 [[d1_databases]]
 binding = "DB"
 database_name = "cherina-pod-db"
-database_id = "ae388ead-47e4-4d23-ba4d-4a84e4afd407"
+database_id = "YOUR_D1_DATABASE_ID"
