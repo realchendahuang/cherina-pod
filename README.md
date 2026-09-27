@@ -1,6 +1,6 @@
 # cherina-pod
 
-[![CI](https://github.com/realchendahuang/cherina-pod/actions/workflows/ci.yml/badge.svg)](https://github.com/realchendahuang/cherina-pod/actions/workflows/ci.yml) [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](LICENSE)
+[![CI](https://github.com/realchendahuang/cherina-pod/actions/workflows/ci.yml/badge.svg)](https://github.com/realchendahuang/cherina-pod/actions/workflows/ci.yml) [![GitHub Repo stars](https://img.shields.io/github/stars/realchendahuang/cherina-pod?style=social&label=Stars)](https://github.com/realchendahuang/cherina-pod/stargazers) [![GitHub forks](https://img.shields.io/github/forks/realchendahuang/cherina-pod?style=social&label=Forks)](https://github.com/realchendahuang/cherina-pod/forks) [![GitHub issues](https://img.shields.io/github/issues/realchendahuang/cherina-pod?style=social&label=Issues)](https://github.com/realchendahuang/cherina-pod/issues) [![GitHub commit activity](https://img.shields.io/github/commit-activity/m/realchendahuang/cherina-pod?style=social&label=Commits)](https://github.com/realchendahuang/cherina-pod/commits/main) [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](LICENSE)
 
 > 中文 · [English](README.en.md)
 
@@ -190,3 +190,7 @@ AGPL-3.0，见 [LICENSE](LICENSE)。你的 fork 同样要开源——这是 AGPL
 
 - Cloudflare 一键部署按钮（Deploy to Cloudflare）
 - 更多的 `podcast_meta.json` 分类 / 难度标注
+
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=realchendahuang/cherina-pod&type=Date)](https://star-history.com/#realchendahuang/cherina-pod&Date)

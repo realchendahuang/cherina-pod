@@ -1,6 +1,6 @@
 # cherina-pod
 
-[![CI](https://github.com/realchendahuang/cherina-pod/actions/workflows/ci.yml/badge.svg)](https://github.com/realchendahuang/cherina-pod/actions/workflows/ci.yml) [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](LICENSE)
+[![CI](https://github.com/realchendahuang/cherina-pod/actions/workflows/ci.yml/badge.svg)](https://github.com/realchendahuang/cherina-pod/actions/workflows/ci.yml) [![GitHub Repo stars](https://img.shields.io/github/stars/realchendahuang/cherina-pod?style=social&label=Stars)](https://github.com/realchendahuang/cherina-pod/stargazers) [![GitHub forks](https://img.shields.io/github/forks/realchendahuang/cherina-pod?style=social&label=Forks)](https://github.com/realchendahuang/cherina-pod/forks) [![GitHub issues](https://img.shields.io/github/issues/realchendahuang/cherina-pod?style=social&label=Issues)](https://github.com/realchendahuang/cherina-pod/issues) [![GitHub commit activity](https://img.shields.io/github/commit-activity/m/realchendahuang/cherina-pod?style=social&label=Commits)](https://github.com/realchendahuang/cherina-pod/commits/main) [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](LICENSE)
 
 > English · [中文](README.md)
 
@@ -163,3 +163,7 @@ The bundled `transcribe.py` uses Alibaba Cloud Paraformer (`DASHSCOPE_API_KEY`),
 ## License
 
 AGPL-3.0 — see [LICENSE](LICENSE). Your fork must stay open source; that's the AGPL's requirement, and the reason this project chose it.
+
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=realchendahuang/cherina-pod&type=Date)](https://star-history.com/#realchendahuang/cherina-pod&Date)
