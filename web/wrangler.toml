@@ -16,9 +16,9 @@ compatibility_date = "2024-12-01"
 workers_dev = true
 
 # 自定义域名：默认注释（workers.dev 即可用）。要启用，改 pattern 为你自己的域名。
-# routes = [
-#   { pattern = "pod.example.com", custom_domain = true }
-# ]
+routes = [
+  { pattern = "pod.cherina.app", custom_domain = true }
+]
 
 # 静态资源：public/ 下的文件直接由 Cloudflare 边缘缓存分发
 [assets]
@@ -34,4 +34,4 @@ enabled = true
 [[d1_databases]]
 binding = "DB"
 database_name = "cherina-pod-db"
-database_id = "YOUR_D1_DATABASE_ID"
+database_id = "ae388ead-47e4-4d23-ba4d-4a84e4afd407"
