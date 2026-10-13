@@ -52,3 +52,5 @@ private/
 
 # ZCode 会话产物
 .zcode/
+
+.cloudflare
