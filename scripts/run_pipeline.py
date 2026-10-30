@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""一键流水线：下载（可选）→ 转写 → 翻译 → 对齐，产出 bilingual.json。
+"""一键流水线：下载（可选）→ 转写 → 翻译 → 对齐 → 生成精听课（player.html / handout.html / notes.md）。
 
 用法：
   python3 scripts/run_pipeline.py <episode_dir>                    # 已有音频，跑转写→翻译→对齐
   python3 scripts/run_pipeline.py --fetch <rss|id> --index 3       # 先下载第 3 集再跑全流程
   python3 scripts/run_pipeline.py <episode_dir> --skip-transcribe  # 已转写，续跑
-  python3 scripts/run_pipeline.py <episode_dir> --skip-translate   # 已翻译，只对齐
+  python3 scripts/run_pipeline.py <episode_dir> --skip-translate   # 已翻译，只对齐并生成精听课
+  python3 scripts/run_pipeline.py --fetch <rss> --index 1 --level "雅思 6"  # 指定水平（影响难点挑选）
 """
 
 import argparse
@@ -41,6 +42,8 @@ def main():
         default="zh",
         help="目标语言（BCP-47；默认 zh = 简体中文）",
     )
+    ap.add_argument("--level", help="学习者水平，例如“四级”“雅思 6”（影响难点表达挑选）")
+    ap.add_argument("--no-notes", action="store_true", help="不生成难点表达")
     args = ap.parse_args()
 
     # 1. 可选：下载
@@ -98,8 +101,16 @@ def main():
     if run("align.py", ep, "--source-lang", args.source_lang, "--target-lang", args.target_lang):
         return 1
 
-    print("\n🎉 流水线完成！bilingual.json 已就绪。")
-    print("  下一步：python3 scripts/migrate_to_d1.py && python3 scripts/sync_web.py")
+    # 5. 生成精听课
+    lesson_args = [ep]
+    if args.level:
+        lesson_args += ["--level", args.level]
+    if args.no_notes:
+        lesson_args.append("--no-notes")
+    if run("build_lesson.py", *lesson_args):
+        return 1
+
+    print("\n🎉 完成！双击 player.html 开始精听，handout.html 可打印成讲义。")
     return 0
 
 

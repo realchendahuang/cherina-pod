@@ -1,5 +1,5 @@
 #!/bin/bash
-# 批量新增播客单集：下载 → 转写 → 翻译 → 对齐。
+# 批量生成精听课：下载 → 转写 → 翻译 → 对齐 → 精听课。
 # 用法：bash scripts/batch_add.sh [jobs_file]
 # jobs 文件每行：<feedUrl> <index>   （# 开头为注释）
 # 流水线自带断点续跑：失败后重跑会跳过已完成步骤/已译句子。
@@ -34,7 +34,7 @@ done 3< "$JOBS"
 
 echo ""
 if [[ $ok -eq 0 ]]; then
-  echo "❌ 全部任务失败（成功 $ok，失败 $fail），跳过汇总发布。修好后重跑即可（流水线断点续跑）。"
+  echo "❌ 全部任务失败（成功 $ok，失败 $fail），修好后重跑即可（流水线断点续跑）。"
   exit 1
 fi
 
@@ -42,5 +42,3 @@ echo "🎉 批量任务结束：成功 $ok，失败 $fail"
 if [[ $fail -gt 0 ]]; then
   echo "⚠️ 有失败任务：先发布已完成的部分，失败的修好后重跑本脚本会断点续跑。"
 fi
-echo "运行 migrate_to_d1 + sync_web 汇总："
-python3 scripts/migrate_to_d1.py && python3 scripts/sync_web.py

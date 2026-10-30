@@ -29,7 +29,8 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 from common import UA, load_env, norm_text  # noqa: E402
 
-MODEL = "deepseek-v4-flash"
+# 默认模型；可用环境变量 LLM_MODEL 覆盖（例如供应商下线旧模型时）
+MODEL = os.environ.get("LLM_MODEL") or "deepseek-v4.1-flash"
 
 # 语言代码 → prompt 里的语言名。表里没有的直接用代码本身（模型认得 BCP-47 常见标签）。
 LANG_LABEL = {
@@ -57,8 +58,22 @@ def lang_label(code):
         return ""
     return LANG_LABEL.get(code, code)
 
-# preferred=True 主用（ollama-cloud 质量稳定、简体）；preferred=False 仅作 fallback
+# 按列表顺序尝试，preferred=False 只作兜底；所有供应商都用 MODEL（LLM_MODEL 可覆盖）
 PROVIDERS = [
+    # 通用 OpenAI 兼容端点（用户自带 key 的首选）：LLM_BASE_URL + LLM_API_KEY [+ LLM_MODEL]
+    {
+        "name": "custom",
+        "base": (os.environ.get("LLM_BASE_URL") or "").rstrip("/"),
+        "key_env": "LLM_API_KEY",
+        "preferred": True,
+    },
+    # 阿里云百炼 OpenAI 兼容模式：和转写共用 DASHSCOPE_API_KEY，一个 key 跑通全流程
+    {
+        "name": "dashscope",
+        "base": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+        "key_env": "DASHSCOPE_API_KEY",
+        "preferred": True,
+    },
     {
         "name": "ollama-cloud",
         "base": "https://ollama.com/v1",
@@ -73,6 +88,8 @@ PROVIDERS = [
     },
 ]
 
+_SESSION = f"cherina-pod-{os.getpid()}-{int(time.time())}"
+
 # 繁→简转换（避免 opencode-go 偶发输出繁体）
 try:
     import opencc
@@ -83,10 +100,11 @@ except ImportError:
 
 
 def available_providers():
-    ok = [p for p in PROVIDERS if os.environ.get(p["key_env"])]
+    PROVIDERS[0]["base"] = (os.environ.get("LLM_BASE_URL") or "").rstrip("/")
+    ok = [p for p in PROVIDERS if os.environ.get(p["key_env"]) and p["base"]]
     if not ok:
         print(
-            "错误：没有可用的翻译供应商（请检查 .env 的 OLLAMA_API_KEY / OPENCODE_API_KEY）",
+            "错误：没有可用的翻译供应商（请在 .env 填 DASHSCOPE_API_KEY，或 LLM_BASE_URL + LLM_API_KEY）",
             file=sys.stderr,
         )
         sys.exit(2)
@@ -98,7 +116,7 @@ def chat_completion(provider, messages, max_tokens=3000, timeout=300):
     url = f"{provider['base']}/chat/completions"
     body = json.dumps(
         {
-            "model": MODEL,
+            "model": os.environ.get("LLM_MODEL") or MODEL,
             "messages": messages,
             "temperature": 0.3,
             "max_tokens": max_tokens,
@@ -112,6 +130,8 @@ def chat_completion(provider, messages, max_tokens=3000, timeout=300):
             "Authorization": f"Bearer {os.environ.get(provider['key_env'])}",
             # Cloudflare 拦截默认 urllib UA（error 1010），需伪装浏览器 UA
             "User-Agent": UA,
+            # opencode-go 要求稳定的会话 ID（缺失会 400 MissingSessionID）
+            "x-opencode-session": _SESSION,
         },
     )
     try:

@@ -42,12 +42,12 @@
 
 ## 5. 输出
 
-一期生成一个文件夹 `out/<episode-id>/`：
+一期的产物都在 `episodes/<episode-id>/`：
 
 | 文件 | 内容 | MVP |
 |---|---|---|
 | `player.html` + `audio/` | 精听网页，双击打开、离线可用：见第 8 节 | ✅ 核心 |
-| `handout.html` / `handout.pdf` | 打印讲义（A4）：见第 6 节 | ✅ |
+| `handout.html` | 打印讲义（A4）：见第 6 节；浏览器打印存为 PDF | ✅ |
 | 可部署的 `site/` | 精听网页的静态版本，供有公开网址的人部署，二维码指向它 | 可选 |
 | `notes.md` | 本期 20 个左右的难点表达：原句、时间点、讲解 | ✅ |
 | `bilingual.json`、`transcript.json` | 数据，供其他工具使用 | ✅ |
@@ -106,7 +106,7 @@
 
 ## 12. MVP 验收
 
-1. 一句话生成：给出一期 RSS + 集数，skill 产出 `player.html`、`handout.pdf`、`notes.md`。
+1. 一句话生成：给出一期 RSS + 集数，skill 产出 `player.html`、`handout.html`、`notes.md`。
 2. 双击 `player.html` 离线可用，能完成逐句播放、单句循环、倍速、盲听；讲义上的段号能在网页里直接跳转。
 3. 讲义 A4 打印排版正常，原文、译文、听写空行清晰。
 4. （可选）填了 `--qr-base-url` 时，讲义印出段二维码，部署 `site/` 后扫码能定位到对应段。

@@ -1,153 +1,69 @@
 # cherina-pod
 
-[![CI](https://github.com/realchendahuang/cherina-pod/actions/workflows/ci.yml/badge.svg)](https://github.com/realchendahuang/cherina-pod/actions/workflows/ci.yml) [![GitHub Repo stars](https://img.shields.io/github/stars/realchendahuang/cherina-pod?style=social&label=Stars)](https://github.com/realchendahuang/cherina-pod/stargazers) [![GitHub forks](https://img.shields.io/github/forks/realchendahuang/cherina-pod?style=social&label=Forks)](https://github.com/realchendahuang/cherina-pod/forks) [![GitHub issues](https://img.shields.io/github/issues/realchendahuang/cherina-pod?style=social&label=Issues)](https://github.com/realchendahuang/cherina-pod/issues) [![GitHub commit activity](https://img.shields.io/github/commit-activity/m/realchendahuang/cherina-pod?style=social&label=Commits)](https://github.com/realchendahuang/cherina-pod/commits/main) [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](LICENSE)
+[![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](LICENSE)
 
-> 中文 · [English](README.en.md)
+**一句话把任意一期外语播客做成一节精听课。**
 
-**一套你自己拥有的多语精听底座。**
+给它一期播客，它在你自己的电脑上完成下载、转写、翻译和对齐，然后生成：
 
-输入任意语言、任意播客的 RSS，产出带词级时间戳的转写 + 双语逐句对照（`bilingual.json`）——在你自己的机器上跑，部署在你自己的 Cloudflare 上，服务器不持有你的内容。
+- **精听网页 `player.html`**：双击打开、离线可用。逐句播放、单句循环、倍速、盲听，按“盲听 → 精听 → 对照 → 再盲听”四步练，进度存在浏览器里。
+- **打印讲义 `handout.html`**：双语逐句对照，留有订正空行；可以切换成听写版，答案放在后面。浏览器打印即可存成 PDF。
+- **难点表达 `notes.md`**：本期最值得学的 20 个表达，附原句、时间点和解释，可以直接放进 Obsidian。
 
-语言不是底座的属性：英→中、中→日、西→韩，用的是同一个引擎、同一种数据契约，换的只是语言对。中英那一版只是它的一个实例。
-
-它可以是一个命令行流水线、一个 agent skill，也可以是部署在你账号下的网页。核心不是任何一种形态，而是**那份纯 JSON 数据，和处理它的引擎**。
-
----
-
-## 底座契约
-
-这四条是对使用者的硬承诺，也是所有信任的根：
-
-1. **无需注册** — 核心功能（采集、转写、翻译、训练）不设账号墙，没有"先登录才能用"。
-2. **数据即文件** — 唯一数据契约是纯 JSON（`transcript.json` / `translation.json` / `bilingual.json`）：没有私有格式、没有数据库锁定，任何时候 `cp` 走就是完整备份，迁移到任何工具链都不损失。
-3. **本地处理** — 转写与翻译在你自己机器（或你自己部署的 Worker）上完成。本项目不托管、不缓存、不转售你的内容。
-4. **语言无关** — 语言对是配置项，不是写死的假设。`--source-lang` / `--target-lang` 贯穿全链路（翻译 prompt、JSON 键名、D1 列名都是 `source`/`target`），换语言对不用改数据结构。*转写侧默认走 Paraformer，但 `transcript.json` 就是那道接口——任何 ASR 都能顶替（见下）。*
-
-**扩展点**（付费层预留的地基，现在就可以依赖）：
-
-| 扩展点 | 现状 | 约定 |
-|---|---|---|
-| 同步 | 无 | 学习数据（生词本 / SRS 进度 / 标记）预留跨端同步接口；**转写正文默认只留本地** |
-| 身份 | 无账号体系 | 任何需要账户的场景（多端、机构版）走独立 auth 层，不侵入本地处理链路 |
-
-## 它是什么 / 不是什么
-
-**是**：本地流水线 + 纯 JSON 数据契约 + 可自部署的 Cloudflare 展示层 + agent skill 打包。
-
-**不是**：音频分发方、内容库、"翻译 App"。
-
-**版权三条件（红线，不可让步）**：
-
-1. **永远不碰音频** — 不缓存、不代理、不下载，只播放出版方自己的地址。
-2. **永不存在中央内容库** — 不持久化、不共享用户提交的转写与译文。
-3. **仓库不携带第三方示例内容** — 任何人播客的完整转写与译文不得进公开仓库（样例只用自制或公有领域音频）。
-
-## 三种形态
-
-| 形态 | 是什么 | 给谁 |
-|---|---|---|
-| **流水线底座** | `scripts/` 全套：fetch → transcribe → translate → align | 想自建、自控的人 |
-| **agent skill** | 把流水线打包给 agent 调用（`skills/cherina-pod/SKILL.md`） | agent 用户、批量处理 |
-| **现成实例** | [pod.cherina.app](https://pod.cherina.app) —— 本项目自己部署的一份 | 不想折腾的人 |
+默认是英文播客配中文译文，中文播客配英文译文同样支持。可以直接运行脚本，也可以作为 agent skill 交给 Claude Code、WorkBuddy 等 agent 调用。
 
 ## 快速开始
 
-### 1. 环境
+```bash
+git clone https://github.com/realchendahuang/cherina-pod.git && cd cherina-pod
+cp .env.example .env              # 填 DASHSCOPE_API_KEY
+python3 -m pip install -r requirements.txt   # 可选，用于繁→简转换
+```
+
+依赖：Python ≥ 3.9、`ffmpeg` / `ffprobe`。
 
 ```bash
-git clone <this-repo> && cd cherina-pod
-cp .env.example .env        # 填密钥，见下
-python3 -m pip install -r requirements.txt   # 可选，仅繁→简转换需要
+# 1. 找播客
+python3 scripts/fetch_podcast.py --search "6 Minute English"
+
+# 2. 一键生成第 1 集的精听课
+python3 scripts/run_pipeline.py --fetch <id 或 RSS 地址> --index 1 --level "四级"
+
+# 3. 打开
+open episodes/<id>/player.html
 ```
 
-`.env` 需要的密钥（**只放本地，绝不进仓库**）：
-
-| 变量 | 用途 |
-|---|---|
-| `DASHSCOPE_API_KEY` | 阿里云百炼 Paraformer 转写（词级时间戳） |
-| `OLLAMA_API_KEY` / `OPENCODE_API_KEY` | 翻译（OpenAI 兼容端点，双供应商负载均衡，任填其一） |
-| `RUSTFS_*` | 自建音频源，可选；不部署自建源时留空，播放器走 RSS 外链 |
-
-外部依赖：Python ≥ 3.9、ffmpeg / ffprobe、Node ≥ 20。
-
-### 2. 跑通一期
+其他用法：
 
 ```bash
-# 搜索播客 → 拿到 RSS
-python3 scripts/fetch_podcast.py --search "Hidden Brain"
+# 中文播客 + 英文译文
+python3 scripts/run_pipeline.py --fetch <rss> --index 1 --source-lang zh --target-lang en
 
-# 一键流水线：下载 → 转写 → 翻译 → 对齐
-python3 scripts/run_pipeline.py --fetch <rss_url> --index 3
+# 已经有 bilingual.json，只重新生成精听课
+python3 scripts/build_lesson.py episodes/<id> --seg-seconds 120 --notes 30
 
-# 换目标语言（语言对是配置项：默认 auto → zh）
-python3 scripts/run_pipeline.py --fetch <rss_url> --index 3 --source-lang zh --target-lang en
-
-# 已有音频 / 已转写，续跑
-python3 scripts/run_pipeline.py episodes/<id> --skip-transcribe
+# 批量：scripts/batch_jobs.txt 每行 "<feedUrl> <index>"
+bash scripts/batch_add.sh
 ```
 
-批量：在 `scripts/batch_jobs.txt` 每行写 `<feedUrl> <index>`，然后 `bash scripts/batch_add.sh`（串行、断点续跑、失败自动重试）。
+## 密钥
 
-产物落在 `episodes/<id>/`：`transcript.json`（词级时间戳）→ `translation.json`（原始 LLM 产物，gitignore）→ `bilingual.json`（对齐产物，D1 灌库原料）。
+只需要一个阿里云百炼的 `DASHSCOPE_API_KEY`：转写用 Paraformer，翻译和难点表达走百炼的 OpenAI 兼容接口。想换翻译模型时，在 `.env` 里填 `LLM_BASE_URL` + `LLM_API_KEY`（任意 OpenAI 兼容端点），模型名用 `LLM_MODEL` 指定。
 
-### 3. 部署到你自己的 Cloudflare
+## 作为 agent skill 使用
 
-```bash
-cd web
-npm install
-npx wrangler d1 create cherina-pod-db      # 建你自己的库，把返回的 database_id 填进 wrangler.toml
-python3 ../scripts/migrate_to_d1.py        # 扫描本地 episodes/ 生成 web/migrations/*.sql
-cat migrations/*.sql > migrations/_all.sql
-npx wrangler d1 execute cherina-pod-db --remote --file=migrations/_all.sql
+`skills/cherina-pod/SKILL.md` 是 skill 说明。把整个仓库交给 agent，或者把这个目录放进 agent 的 skills 目录，然后说一句：
 
-# 站点配置：构建时用环境变量注入，不必改源码
-SITE_URL=https://my-pod.pages.dev \
-SITE_NAME="My Pod" \
-AUDIO_CDN="" \
-  npm run build
+> 把 6 Minute English 最新一期做成精听课，我大概四级水平。
 
-npx wrangler deploy
+## 流水线
+
+```
+fetch_podcast.py → transcribe.py → translate.py → align.py → build_lesson.py
+   下载音频          词级时间戳转写     逐句翻译        对齐成 bilingual.json   生成精听课
 ```
 
-自建音频源（可选，避开播客托管商的动态插广告导致的字幕漂移）：见 [音频存储方案](docs/音频存储方案.md)。**不配置 `AUDIO_CDN` 时播放器自动走 RSS 外链**，功能完整可用。
-
-> `scripts/deploy_web.sh` 是本项目自用的一键流（迁 D1 + 同步音频 + 构建 + 部署）；自部署按上面几步即可，音频那步可跳过。
-
-## Fork 须知（改这 6 处就能跑自己的实例）
-
-| # | 位置 | 改什么 |
-|---|---|---|
-| 1 | `web/wrangler.toml` | `database_id` 填你自己的库 id；`routes` 段默认已注释（走 `*.workers.dev` 即可） |
-| 2 | `web/public/index.html` | 头部注释块标出的 5 处 `pod.cherina.app`（canonical / og:url / og:image / twitter:image / JSON-LD） |
-| 3 | `web/build.mjs` | 站点名与描述的默认值（或用 `SITE_NAME` / `SITE_DESC` 环境变量覆盖） |
-| 4 | `web/src/app.ts` | 无需改动——站点配置已全部走构建期注入 |
-| 5 | `.env` | 换成你自己的 ASR / 翻译 key；自建音频源不填留空 |
-| 6 | `episodes/` | 换成你自己跑的期数；仓库自带的 `episodes/_sample-intro/` 是合成样例，可留可删 |
-
-## 数据契约
-
-`bilingual.json` —— 唯一需要下游关心的一种：
-
-```json
-{
-  "id": "how-feelings-make-us-smarter",
-  "source_lang": "en",
-  "target_lang": "zh",
-  "podcast": { "title": "Hidden Brain", "title_target": "隐藏的大脑", "author": "..." },
-  "episode": { "title": "...", "title_target": "...", "description": "..." },
-  "duration": 1234.5,
-  "pairs": [
-    { "source": "This is Hidden Brain.", "target": "这里是《隐藏的大脑》。", "start": 0.0, "end": 1.601 }
-  ],
-  "generated_at": "2026-08-23T10:00:00Z"
-}
-```
-
-字段是语言中立的：`source` / `target` 是原文与译文，`*_lang` 记语言对（BCP-47）。换个语言对，结构一个字都不用改。旧格式（`en` / `zh` / `title_zh`）的中间产物仍能被读入，**不需要重跑任何已有数据**。
-
-## 自带 ASR：transcript.json 就是那道接口
-
-`transcript.json` 是转写与流水线其余部分之间的**唯一接口**——翻译、对齐、灌库都只认它的结构，不关心是谁转的。所以换 ASR 不必改任何后续环节，只要产出这个形状：
+`transcript.json` 是转写和后续步骤之间唯一的接口。任何 ASR 只要输出下面这个结构就能接进来，比如 `mlx-whisper`、`faster-whisper`、`whisper.cpp`：
 
 ```json
 {
@@ -157,40 +73,12 @@ npx wrangler deploy
 }
 ```
 
-- `sentences` 是必需项（逐句对齐靠它），`words` 是词级时间戳（更精细的定位与跟读靠它，强烈建议保留）
-- 任何能输出这个结构的工具都能接进来：`mlx-whisper` / `faster-whisper` / `whisper.cpp` / 云端任意 ASR
-- 换完之后：`python3 scripts/align.py <episode_dir>`（已有译文直接对齐）或 `python3 scripts/translate.py <episode_dir> --target-lang <lang>`（连译文一起重来）
+`episodes/_sample-intro/` 是一份人工编写的合成样例，演示数据结构。
 
-默认的 `transcribe.py` 走阿里云百炼 Paraformer（`DASHSCOPE_API_KEY`），国际站同样可用。
+## 内容与版权
 
+生成的转写、译文和讲义来自第三方播客，只供你个人学习使用。它们默认不会被提交到仓库（见 `.gitignore`）。公开分享或出售前，请确认你有相应的内容授权。
 
-**红线**：`transcript.json` 里的 `words`（词级时间戳）是逐句对齐的地基，任何环节不得丢弃。它**不再进仓库**——跑出来的转写和译文是你自己的数据，留在你的工作区即可；代价是**你要自己给它做备份**（丢一次就得重新花钱转写）。
+## 许可
 
-仓库里只保留一份合成样例 [`episodes/_sample-intro/`](episodes/_sample-intro)（人工编写，非任何真实播客内容），用来演示三种文件的结构，并让新 clone 的仓库能直接跑通 `migrate_to_d1.py`：
-
-| 文件 | 装什么 | 入库？ |
-|---|---|---|
-| `transcript.json` | 句级 + **词级**（`words`）时间戳 | ❌ 本地数据，自行备份 |
-| `translation.json` | 原始 LLM 产物（中间态） | ❌ |
-| `bilingual.json` | 对齐后的下游唯一输入 | ❌ |
-| `episodes/_sample-intro/` | 合成样例 | ✅ |
-
-## 文档
-
-- [定位与商业化](docs/定位与商业化.md) —— 产品定位、底座策略、商业化路线
-- [技术方案](docs/技术方案.md) —— 最初的流水线设计（历史文档）
-- [数据架构演进](docs/数据架构演进.md) —— D1 单一数据源的来龙去脉
-- [音频存储方案](docs/音频存储方案.md) —— 为什么音频不进 Cloudflare 静态资产
-
-## 贡献与许可
-
-AGPL-3.0，见 [LICENSE](LICENSE)。你的 fork 同样要开源——这是 AGPL 的要求，也是这个项目选择它的原因。
-
-## 待补
-
-- Cloudflare 一键部署按钮（Deploy to Cloudflare）
-- 更多的 `podcast_meta.json` 分类 / 难度标注
-
-## Star History
-
-[![Star History Chart](https://api.star-history.com/svg?repos=realchendahuang/cherina-pod&type=Date)](https://star-history.com/#realchendahuang/cherina-pod&Date)
+AGPL-3.0，见 [LICENSE](LICENSE)。

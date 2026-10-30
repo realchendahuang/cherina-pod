@@ -130,7 +130,7 @@ def main():
 
     print(
         f"✅ 已更新 {updated} 期标题译文（→ {tgt_desc}），"
-        f"下一步：重跑 align.py + migrate_to_d1.py"
+        f"下一步：重跑 align.py + build_lesson.py"
     )
     return 0
 
