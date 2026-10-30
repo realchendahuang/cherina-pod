@@ -1,0 +1,7 @@
+# 补跑任务（2026-08-12 第三批）：第一批被 ffmpeg 吃 stdin 的坑吞掉的任务，脚本已修复（-nostdin + fd3）
+https://feeds.npr.org/510289/podcast.xml 1  # Planet Money: Currency Chaos in Argentina (39min)
+https://feeds.simplecast.com/BqbsxVfO 2  # 99% Invisible: 100 Objects #12 Negro Cloth (37min)
+https://feeds.simplecast.com/Y8lFbOT4 1  # Freakonomics: Stranger Superpower (34min)
+https://podcasts.files.bbci.co.uk/p02pc9tn.rss 2  # BBC 6 Minute English: The Enhanced Games (6min)
+https://feeds.simplecast.com/kwWc0lhf 2  # Hidden Brain: Making the Most of Your Mistakes (85min)
+https://www.thisamericanlife.org/podcast/rss.xml 2  # This American Life: I Couldn't Help but Notice (60min)

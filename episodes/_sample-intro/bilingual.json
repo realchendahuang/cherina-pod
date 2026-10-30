@@ -1,0 +1,49 @@
+{
+  "id": "_sample-intro",
+  "source_lang": "en",
+  "target_lang": "zh",
+  "podcast": {
+    "title": "Sample Podcast",
+    "author": "cherina-pod (synthetic)",
+    "image": "",
+    "title_target": "示例播客"
+  },
+  "episode": {
+    "title": "Sample Episode: What This Fixture Shows",
+    "title_target": "样例单集：这份数据长什么样",
+    "description": "一段人工编写的双语逐句数据，用来说明 bilingual.json 的结构。",
+    "pub_date": "2026-01-01",
+    "duration": "00:00:21",
+    "image": "",
+    "audio_url": ""
+  },
+  "audio": "",
+  "duration": 21.0,
+  "pairs": [
+    {
+      "source": "This is a synthetic sample, not a real podcast.",
+      "target": "这是一份合成样例，不是真实播客。",
+      "start": 0.0,
+      "end": 3.4
+    },
+    {
+      "source": "It exists so a fresh clone has something to load.",
+      "target": "它的存在，是为了让新克隆的仓库有东西可以灌库。",
+      "start": 3.4,
+      "end": 7.1
+    },
+    {
+      "source": "Each pair carries its own start and end time.",
+      "target": "每一句都带着自己的起止时间。",
+      "start": 7.1,
+      "end": 10.2
+    },
+    {
+      "source": "That is the whole contract: plain JSON, yours to keep.",
+      "target": "契约就这些：纯 JSON，归你自己保管。",
+      "start": 10.2,
+      "end": 14.6
+    }
+  ],
+  "generated_at": "2026-09-27T19:57:10"
+}

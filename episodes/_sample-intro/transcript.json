@@ -1,0 +1,24 @@
+{
+  "_synthetic": "合成样例数据，非真实播客内容。用来说明 transcript.json 的结构——尤其是 words 词级时间戳（下游逐句对齐的基础，任何环节不得丢弃）。",
+  "duration": 21.0,
+  "audio": "synthetic://no-audio",
+  "provider": "synthetic",
+  "model": "synthetic-fixture",
+  "sentences": [
+    { "text": "This is a synthetic sample, not a real podcast.", "start": 0.0, "end": 3.4 },
+    { "text": "It exists so a fresh clone has something to load.", "start": 3.4, "end": 7.1 },
+    { "text": "Each pair carries its own start and end time.", "start": 7.1, "end": 10.2 },
+    { "text": "That is the whole contract: plain JSON, yours to keep.", "start": 10.2, "end": 14.6 }
+  ],
+  "words": [
+    { "word": "This ", "start": 0.0, "end": 0.28 },
+    { "word": "is ", "start": 0.28, "end": 0.53 },
+    { "word": "a ", "start": 0.53, "end": 0.76 },
+    { "word": "synthetic ", "start": 0.76, "end": 1.5 },
+    { "word": "sample, ", "start": 1.5, "end": 2.1 },
+    { "word": "not ", "start": 2.1, "end": 2.5 },
+    { "word": "a ", "start": 2.5, "end": 2.73 },
+    { "word": "real ", "start": 2.73, "end": 3.05 },
+    { "word": "podcast. ", "start": 3.05, "end": 3.4 }
+  ]
+}

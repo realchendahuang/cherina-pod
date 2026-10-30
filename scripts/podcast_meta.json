@@ -1,0 +1,18 @@
+{
+  "_comment": "播客元数据：category（题材分类）+ level（语言难度 beginner/intermediate/advanced）。新增播客时在此补一行，build_index.py 会合并进 index.json；缺省会打警告。",
+
+  "6 Minute English":            { "category": "英语学习", "level": "beginner" },
+
+  "TED Talks Daily":             { "category": "科技认知", "level": "intermediate" },
+  "Hidden Brain":                { "category": "科技认知", "level": "intermediate" },
+  "99% Invisible":               { "category": "科技认知", "level": "intermediate" },
+  "Huberman Lab":                { "category": "科技认知", "level": "advanced" },
+
+  "How I Built This with Guy Raz": { "category": "商业财经", "level": "intermediate" },
+  "Freakonomics Radio":          { "category": "商业财经", "level": "intermediate" },
+  "Planet Money":                { "category": "商业财经", "level": "intermediate" },
+
+  "The Daily":                   { "category": "新闻纪实", "level": "advanced" },
+  "This American Life":          { "category": "新闻纪实", "level": "advanced" },
+  "Lex Fridman Podcast":         { "category": "新闻纪实", "level": "advanced" }
+}
