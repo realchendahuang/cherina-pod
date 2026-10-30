@@ -44,6 +44,7 @@ def load_episode(ep: Path):
         sents.append({"s": src, "t": tgt, "a": float(p["start"]), "b": float(p["end"])})
     for i, s in enumerate(sents):
         s["n"] = i + 1
+    attach_word_times(ep, sents)
     pod = d.get("podcast") or {}
     epi = d.get("episode") or {}
     sample = " ".join(s["s"] for s in sents[:50])
@@ -60,6 +61,39 @@ def load_episode(ep: Path):
         "audio": d.get("audio") or "audio/episode.mp4",
         "sentences": sents,
     }
+
+
+def attach_word_times(ep: Path, sents):
+    """给每句加 w：按空白切出的每个词的开始时间（与网页里的切词规则一致），用于逐词高亮。
+
+    优先用 transcript.json 的词级时间戳；词数对不上时按字符比例估算。
+    """
+    words = []
+    tp = ep / "transcript.json"
+    if tp.exists():
+        try:
+            words = json.loads(tp.read_text(encoding="utf-8")).get("words") or []
+        except (json.JSONDecodeError, OSError):
+            words = []
+    wi = 0
+    for s in sents:
+        toks = re.findall(r"\S+", s["s"])
+        while wi < len(words) and words[wi]["start"] < s["a"] - 0.01:
+            wi += 1
+        j = wi
+        while j < len(words) and words[j]["start"] < s["b"] - 0.005:
+            j += 1
+        span = words[wi:j]
+        wi = j
+        if span and len(span) == len(toks):
+            s["w"] = [round(float(w["start"]), 2) for w in span]
+        else:
+            total = sum(len(t) for t in toks) or 1
+            acc, out = 0, []
+            for t in toks:
+                out.append(round(s["a"] + (s["b"] - s["a"]) * acc / total, 2))
+                acc += len(t)
+            s["w"] = out
 
 
 # ---------------------------------------------------------------- 分段与语速
