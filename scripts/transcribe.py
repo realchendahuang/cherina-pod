@@ -126,14 +126,23 @@ def upload_audio(key: str, policy: dict, audio_path: str) -> str:
     return f"oss://{upload_dir}/{filename}"
 
 
+SOURCE_LANG = "auto"
+_HINTS = {"en": ["en"], "zh": ["zh"], "ja": ["ja"], "ko": ["ko"], "yue": ["yue"], "de": ["de"], "fr": ["fr"], "es": ["es"], "ru": ["ru"]}
+
+
+def _params():
+    """language_hints 按 --source-lang 给；auto 时不传，由模型自动识别。"""
+    hints = _HINTS.get((SOURCE_LANG or "auto").split("-")[0])
+    return {"language_hints": hints} if hints else {}
+
+
 def submit_task(key: str, oss_url: str) -> str:
     url = f"{BASE}/api/v1/services/audio/asr/transcription"
     body = json.dumps(
         {
             "model": MODEL,
             "input": {"file_urls": [oss_url]},
-            # 英文播客：language_hints 只保留 en；若含混合语言可改 ["en", "zh"]
-            "parameters": {"language_hints": ["en"]},
+            "parameters": _params(),
         }
     ).encode("utf-8")
     resp = http_json(
@@ -256,7 +265,10 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("episode_dir")
     ap.add_argument("--force", action="store_true", help="忽略已有 transcript.json，强制重新转写")
+    ap.add_argument("--source-lang", default="auto", help="音频语言（en / zh / ja …；默认 auto 自动识别）")
     args = ap.parse_args()
+    global SOURCE_LANG
+    SOURCE_LANG = args.source_lang
     load_env()
     ep_dir = Path(args.episode_dir).resolve()
     meta_path = ep_dir / "meta.json"

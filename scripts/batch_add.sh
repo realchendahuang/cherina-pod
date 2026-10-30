@@ -17,7 +17,7 @@ while read -r feed idx rest <&3 || [[ -n "${feed:-}" ]]; do
   echo "==================== $(date '+%H:%M:%S') 开始：$feed 第 $idx 集 ===================="
   success=0
   for attempt in 1 2 3; do
-    if python3 scripts/run_pipeline.py --fetch "$feed" --index "$idx"; then
+    if python3 scripts/lesson.py "$feed" --episode "$idx" | tee /dev/stderr | tail -1 | grep -q '^RESULT {"ok": true'; then
       echo "✅ 完成：$feed 第 $idx 集"
       success=1
       break

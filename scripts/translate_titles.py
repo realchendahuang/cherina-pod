@@ -19,6 +19,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
 sys.path.insert(0, str(HERE))
+from common import episodes_root  # noqa: E402
 
 from translate import (  # noqa: E402
     available_providers,
@@ -72,13 +73,18 @@ def main():
         default="zh",
         help="标题翻译的目标语言（默认 zh）；与已有译文语言不同的期请重跑",
     )
+    ap.add_argument("episode_dir", nargs="?", help="只处理这一期（省略则处理产物目录下全部期）")
     args = ap.parse_args()
     load_env()
     provider_order = available_providers()
+    metas = ([Path(args.episode_dir).resolve() / "meta.json"] if args.episode_dir
+             else sorted(episodes_root().glob("*/meta.json")))
 
     todo = []
     files = {}
-    for meta_path in sorted(ROOT.glob("episodes/*/meta.json")):
+    for meta_path in metas:
+        if not meta_path.exists():
+            continue
         data = json.loads(meta_path.read_text(encoding="utf-8"))
         episode = data.get("episode", {})
         # title_zh 是旧键名，已存在即视为已译（不重复花钱）

@@ -19,21 +19,24 @@
 - 语言对是配置项：`--source-lang`（默认 auto）/ `--target-lang`（默认 zh）；数据键名一律 `source` / `target`，读入兼容旧格式 `en` / `zh` / `title_zh`。界面语言跟随译文语言（中文译文 → 中文界面，否则英文界面）。
 - 翻译遵循信达雅，逐句输出 `{source, target}`；`translation.json` 的 source 必须回填 transcript 原文。
 - 难点表达必须能在原句中原样找到，对不上的条目直接丢弃。
-- 密钥只放 `.env`（gitignore），绝不进仓库、不打印。
+- 密钥只放 `.env`（gitignore），绝不进仓库、不打印。查找顺序：当前目录、仓库根目录、`~/.config/cherina-pod/.env`。
+- 产物目录默认 `episodes/`，环境变量 `CHERINA_POD_OUT` 可覆盖。
+- `lesson.py` 的 RESULT 契约（`ok` / `stage` / `error` / `fix` 及成功字段）是 SKILL.md 依赖的接口，改动要同步 SKILL.md。
 
 ## 目录
-- `scripts/`：流水线脚本；`scripts/templates/` 是精听网页模板
-- `skills/cherina-pod/SKILL.md`：agent skill 说明
+- `SKILL.md`：agent skill 说明（仓库根目录即 skill 目录，可直接克隆进 agent 的 skills 目录）
+- `scripts/lesson.py`：唯一入口，最后一行输出 `RESULT {json}`；其余脚本是它调用的步骤
+- `scripts/templates/`：精听网页模板（前端由主代理亲自写，不外包给子代理）
 - `episodes/`：每期一个目录，内容全部 gitignore（样例除外）
 - `docs/`：PRD
 - `private/`：调研与内部材料，gitignore
 
 ## 常用命令
 ```bash
-python3 scripts/fetch_podcast.py --search "播客名"                      # 搜索播客
-python3 scripts/fetch_podcast.py --episodes <id|rss>                    # 列单集
-python3 scripts/run_pipeline.py --fetch <id|rss> --index 1 --level "四级" # 一键生成精听课
-python3 scripts/build_lesson.py episodes/<id>                           # 只重新生成精听课
+python3 scripts/lesson.py --doctor                          # 检查环境与密钥
+python3 scripts/lesson.py "播客名或RSS" --list                # 列单集
+python3 scripts/lesson.py "播客名或RSS" --episode 1 --level 四级 # 一键生成精听课
+python3 scripts/build_lesson.py episodes/<id>               # 只重新生成精听课
 python3 scripts/build_lesson.py episodes/<id> --no-notes                # 不调用 LLM
 bash scripts/batch_add.sh                                               # 批量（scripts/batch_jobs.txt）
 ```

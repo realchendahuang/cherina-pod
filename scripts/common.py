@@ -20,10 +20,25 @@ UA = (
 )
 
 
+ENV_PATHS = [
+    Path.cwd() / ".env",
+    ROOT / ".env",
+    Path.home() / ".config" / "cherina-pod" / ".env",
+]
+
+
+def episodes_root():
+    """产物目录：环境变量 CHERINA_POD_OUT 优先，否则仓库下的 episodes/。"""
+    p = Path(os.environ.get("CHERINA_POD_OUT") or (ROOT / "episodes")).expanduser()
+    p.mkdir(parents=True, exist_ok=True)
+    return p
+
+
 def load_env():
-    """读取 .env 到环境变量（不覆盖已有值；容忍 export 前缀与成对引号）。"""
-    env_path = ROOT / ".env"
-    if env_path.exists():
+    """依次读取 ENV_PATHS 里存在的 .env（不覆盖已有环境变量；容忍 export 前缀与成对引号）。"""
+    for env_path in ENV_PATHS:
+        if not env_path.exists():
+            continue
         for line in env_path.read_text().splitlines():
             line = line.strip()
             if line.startswith("export "):

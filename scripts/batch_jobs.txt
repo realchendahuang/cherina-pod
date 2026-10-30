@@ -1,3 +1,3 @@
-# 批量新增单集任务：<feedUrl> <index>  # 备注
-# 2026-08-12 第二、三批任务已全部完成（11 期 → 21 期）。
-# 下一批新任务在此追加即可；跑法：bash scripts/batch_add.sh
+# 批量任务：每行 "<RSS 地址> <集编号>"（编号 1 = 最新一集），# 开头为注释。
+# 跑法：bash scripts/batch_add.sh
+# https://podcasts.files.bbci.co.uk/p02pc9tn.rss 1

@@ -396,7 +396,7 @@ def main():
 
     ep = Path(args.episode_dir).resolve()
     if not (ep / "bilingual.json").exists():
-        print(f"找不到 {ep / 'bilingual.json'}，请先跑 run_pipeline.py", file=sys.stderr)
+        print(f"找不到 {ep / 'bilingual.json'}，请先跑 lesson.py", file=sys.stderr)
         return 2
     lesson = load_episode(ep)
     if not lesson["sentences"]:

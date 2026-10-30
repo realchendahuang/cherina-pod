@@ -20,12 +20,11 @@ import xml.etree.ElementTree as ET
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-from common import UA, http_get, http_json, strip_html  # noqa: E402
+from common import UA, episodes_root, http_get, http_json, load_env, strip_html  # noqa: E402
 
 ITUNES_SEARCH = "https://itunes.apple.com/search"
 ITUNES_LOOKUP = "https://itunes.apple.com/lookup"
 ITUNES_NS = "{http://www.itunes.com/dtds/podcast-1.0.dtd}"
-EPISODES_ROOT = os.path.join(HERE, "..", "episodes")
 
 
 def fmt_pub_date(rfc822):
@@ -53,7 +52,7 @@ def episode_slug(ep):
     """
     slug = slugify(ep["title"])
     if slug:
-        ep_dir = os.path.join(EPISODES_ROOT, slug)
+        ep_dir = os.path.join(episodes_root(), slug)
         meta_path = os.path.join(ep_dir, "meta.json")
         if not os.path.isdir(ep_dir) or not os.path.exists(meta_path):
             return slug
@@ -328,7 +327,7 @@ def download_episode(src, index, keep_original=False):
         sys.exit(f"第 {index} 集没有音频链接（可能是 RSS 不提供 enclosure）")
 
     slug = episode_slug(ep)
-    ep_dir = os.path.join(EPISODES_ROOT, slug)
+    ep_dir = os.path.join(episodes_root(), slug)
     audio_dir = os.path.join(ep_dir, "audio")
     os.makedirs(audio_dir, exist_ok=True)
 
@@ -400,7 +399,36 @@ def download_episode(src, index, keep_original=False):
     return ep_dir
 
 
+def import_local_audio(path, keep_original=True):
+    """把本地音频导入为一期：episodes/<slug>/audio/episode.mp4 + meta.json。返回期目录。"""
+    import shutil
+
+    src = os.path.abspath(os.path.expanduser(path))
+    if not os.path.isfile(src):
+        sys.exit(f"找不到本地音频：{src}")
+    stem = os.path.splitext(os.path.basename(src))[0]
+    h = hashlib.sha1(src.encode("utf-8")).hexdigest()[:6]
+    slug = (slugify(stem) or "local") + "-" + h
+    ep_dir = os.path.join(episodes_root(), slug)
+    audio_dir = os.path.join(ep_dir, "audio")
+    os.makedirs(audio_dir, exist_ok=True)
+    ext = os.path.splitext(src)[1].lstrip(".").lower() or "audio"
+    staged = os.path.join(audio_dir, f"source.{ext}")
+    if not os.path.exists(os.path.join(audio_dir, "episode.mp4")):
+        shutil.copyfile(src, staged)
+        compress_audio(staged, audio_dir, keep_original=False)
+    meta = {
+        "podcast": {"title": "Local audio", "author": "", "description": "", "image": "", "feed_url": "", "link": ""},
+        "episode": {"title": stem, "description": "", "pub_date": "", "duration": "", "audio_url": "", "image": ""},
+        "audio_path": "audio/episode.mp4",
+    }
+    with open(os.path.join(ep_dir, "meta.json"), "w", encoding="utf-8") as f:
+        json.dump(meta, f, ensure_ascii=False, indent=2)
+    return ep_dir
+
+
 def main():
+    load_env()
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--search", help="搜索播客名")
     ap.add_argument("--episodes", help="列单集：RSS URL 或 iTunes collectionId")
@@ -427,7 +455,7 @@ def main():
     elif args.episodes:
         if args.index:
             ep_dir = download_episode(args.episodes, args.index, keep_original=args.keep_original)
-            # 机器可读标记行：run_pipeline.py 解析它定位本期目录（比目录 mtime 猜测可靠）
+            # 机器可读标记行：lesson.py 之外的脚本可解析它定位本期目录（比目录 mtime 猜测可靠）
             print(f"EP_DIR={ep_dir}")
         else:
             list_episodes(args.episodes)
