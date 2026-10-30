@@ -7,7 +7,7 @@
 - 讲义二维码是可选的低优先级功能，需要使用者自己有公开网址。
 
 ## 技术栈
-- Python 3.9+，只用标准库（`opencc` 可选），外部依赖 `ffmpeg` / `ffprobe`
+- Python 3.10+，只用标准库（`opencc` 可选），外部依赖 `ffmpeg` / `ffprobe`
 - 转写：阿里云百炼 Paraformer（`DASHSCOPE_API_KEY`）
 - 翻译与难点表达：OpenAI 兼容接口，默认模型 `deepseek-v4.1-flash`；供应商顺序 `LLM_BASE_URL` 自定义 → DashScope 兼容模式 → ollama-cloud → opencode-go
 - 精听网页与讲义：单文件 HTML，原生 JS，无构建步骤；模板在 `scripts/templates/`

@@ -7,7 +7,7 @@
 逐句精听网页 · 可打印双语讲义 · 难点表达笔记 —— 全部在你自己的电脑上生成
 
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](LICENSE)
-[![Python](https://img.shields.io/badge/Python-3.9%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![Agent Skill](https://img.shields.io/badge/Agent%20Skill-SKILL.md-8A2BE2)](SKILL.md)
 [![CI](https://github.com/realchendahuang/cherina-pod/actions/workflows/ci.yml/badge.svg)](https://github.com/realchendahuang/cherina-pod/actions/workflows/ci.yml)
 [![GitHub stars](https://img.shields.io/github/stars/realchendahuang/cherina-pod?style=social)](https://github.com/realchendahuang/cherina-pod/stargazers)
@@ -66,7 +66,7 @@ cherina-pod 把这些都自动化了。给它一期播客，它会：
 
 ### 1. 准备环境
 
-需要 **Python 3.9+** 和 **ffmpeg**。
+需要 **Python 3.10+** 和 **ffmpeg**。
 
 ```bash
 # macOS

@@ -58,7 +58,7 @@ def doctor(online=True):
     def add(name, ok, fix=""):
         checks.append({"check": name, "ok": bool(ok), **({} if ok else {"fix": fix})})
 
-    add("python>=3.9", sys.version_info >= (3, 9), "安装 Python 3.9 或更高版本。")
+    add("python>=3.10", sys.version_info >= (3, 10), "安装 Python 3.10 或更高版本。")
     add("ffmpeg", shutil.which("ffmpeg"), "安装 ffmpeg：macOS 用 `brew install ffmpeg`，Ubuntu 用 `sudo apt install ffmpeg`。")
     add("ffprobe", shutil.which("ffprobe"), "ffprobe 随 ffmpeg 一起安装。")
     has_key = bool(os.environ.get("DASHSCOPE_API_KEY"))

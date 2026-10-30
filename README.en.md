@@ -7,7 +7,7 @@
 Line-by-line listening page · printable bilingual handout · key-phrase notes — all generated on your own machine
 
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](LICENSE)
-[![Python](https://img.shields.io/badge/Python-3.9%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![Agent Skill](https://img.shields.io/badge/Agent%20Skill-SKILL.md-8A2BE2)](SKILL.md)
 [![CI](https://github.com/realchendahuang/cherina-pod/actions/workflows/ci.yml/badge.svg)](https://github.com/realchendahuang/cherina-pod/actions/workflows/ci.yml)
 [![GitHub stars](https://img.shields.io/github/stars/realchendahuang/cherina-pod?style=social)](https://github.com/realchendahuang/cherina-pod/stargazers)
@@ -41,7 +41,7 @@ Everything runs locally. No account, no upload. Use it from the command line, or
 
 ## Quick start
 
-Requires **Python 3.9+** and **ffmpeg** (`brew install ffmpeg` / `sudo apt install ffmpeg`).
+Requires **Python 3.10+** and **ffmpeg** (`brew install ffmpeg` / `sudo apt install ffmpeg`).
 
 ```bash
 git clone https://github.com/realchendahuang/cherina-pod.git
