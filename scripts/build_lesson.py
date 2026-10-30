@@ -179,26 +179,26 @@ def write_player(ep, lesson, segs, notes):
 HANDOUT_CSS = """
 @page{size:A4;margin:14mm 13mm 16mm}
 *{box-sizing:border-box}
-body{margin:0;color:#111;font:10.5pt/1.5 -apple-system,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;background:#eee}
+body{margin:0;color:#111;font:10.5pt/1.5 -apple-system,"SF Pro Text","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;background:#eee}
 .page{max-width:210mm;margin:0 auto;background:#fff;padding:14mm 13mm}
 .tool{position:sticky;top:0;background:#222;color:#fff;padding:8px 12px;display:flex;gap:8px;align-items:center;justify-content:center;font-size:14px;z-index:9}
 .tool button{font:inherit;padding:6px 12px;border-radius:6px;border:1px solid #666;background:#333;color:#fff;cursor:pointer}
-.tool button.on{background:#c2410c;border-color:#c2410c}
+.tool button.on{background:#0F766E;border-color:#0F766E}
 .tool select{font:inherit;padding:5px 6px;border-radius:6px;background:#333;color:#fff;border:1px solid #666}
 .tool .sep{width:1px;height:20px;background:#555;margin:0 4px}
 .seg.off{display:none}
 h1{font-size:17pt;margin:0 0 2mm;line-height:1.25}
 .sub{color:#555;margin-bottom:1mm}
 .meta{color:#555;font-size:9.5pt;margin:2mm 0 4mm}
-.method{border:1px solid #ccc;border-radius:3mm;padding:3mm 4mm;margin:0 0 6mm;font-size:9.5pt}
-.method b{color:#c2410c}
+.method{background:#F5F4F0;border-radius:3mm;padding:3mm 4mm;margin:0 0 6mm;font-size:9.5pt}
+.method b{color:#0F766E}
 .method ol{margin:1mm 0 0;padding-left:5mm}
 .seg{margin-top:6mm}
 .seg h2{font-size:12pt;margin:0 0 2mm;padding-bottom:1mm;border-bottom:1.5pt solid #111;display:flex;justify-content:space-between;align-items:baseline}
 .seg h2 span{font-size:9pt;font-weight:400;color:#555}
 .row{display:grid;grid-template-columns:8mm 1.15fr 1fr;gap:3mm;padding:1.6mm 0;border-bottom:.4pt solid #ddd;break-inside:avoid}
 .no{color:#888;font-size:8.5pt;padding-top:.6mm}
-.src{font-family:Georgia,"Times New Roman",serif;font-size:11pt}
+.src{font-size:11pt;font-weight:500}
 .tgt{color:#333}
 .line{border-bottom:.6pt dotted #aaa;height:6mm}
 .src .line{margin-top:.5mm}
@@ -209,10 +209,10 @@ body.dict .main .row{grid-template-columns:8mm 1fr}
 body.dict .main .src .line{height:7mm}
 .answers{break-before:page}
 .answers h1{font-size:14pt}
-mark{background:none;border-bottom:1.2pt solid #c2410c}
+mark{background:#E3F1EE;color:inherit;border-radius:1mm;padding:0 .5mm}
 table.notes{width:100%;border-collapse:collapse;font-size:9.5pt}
 table.notes th,table.notes td{border-bottom:.4pt solid #ddd;padding:1.6mm 1.5mm;text-align:left;vertical-align:top}
-table.notes td.e{font-family:Georgia,serif;font-weight:600;white-space:nowrap}
+table.notes td.e{font-weight:700;white-space:nowrap}
 table.notes td.n{color:#888;white-space:nowrap}
 .notes-sec{break-before:page}
 .foot{margin-top:8mm;color:#999;font-size:8pt;text-align:center}
@@ -226,7 +226,7 @@ HANDOUT_TXT = {
         "use": "配合同一文件夹里的 <b>player.html</b> 使用：在网页里选择对应的段号，句子编号和讲义一致。",
         "steps": ["<b>盲听</b>：不看讲义，把一段完整听一遍，记下听懂了几成。",
                   "<b>精听</b>：逐句听，没听懂就单句循环；听写版在空行里写下听到的内容。",
-                  "<b>对照</b>：对照原文和译文订正，划出没听出来的词，留意下划线的难点表达。",
+                  "<b>对照</b>：对照原文和译文订正，划出没听出来的词，留意标色的难点表达。",
                   "<b>再盲听</b>：合上讲义再听一遍，和第一遍比一比。"],
         "range": "打印范围：第", "range2": "段", "seg": "第 {n} 段", "answers": "答案（原文与译文）", "notes": "难点表达",
         "th": ["句", "表达", "类型", "解释"], "wpm": "{r} 词/分", "cpm": "{r} 字/分",
