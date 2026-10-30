@@ -1,0 +1,25 @@
+name: 推荐播客 / Recommend a podcast
+description: 推荐一个适合精听的播客，我们会加进 README
+labels: [podcast]
+body:
+  - type: input
+    id: name
+    attributes:
+      label: 播客名 / Name
+    validations:
+      required: true
+  - type: input
+    id: link
+    attributes:
+      label: Apple Podcasts 或 RSS 链接 / Link
+    validations:
+      required: true
+  - type: dropdown
+    id: level
+    attributes:
+      label: 难度 / Level
+      options: [入门 Beginner, 中级 Intermediate, 进阶 Advanced]
+  - type: textarea
+    id: why
+    attributes:
+      label: 为什么适合练听力？ / Why is it good for listening practice?

@@ -1,0 +1,14 @@
+name: 功能建议 / Feature request
+description: 想要的新功能或改进
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: 你在练听力时遇到了什么问题？ / What problem do you have?
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: 你希望怎么解决？ / What would you like?

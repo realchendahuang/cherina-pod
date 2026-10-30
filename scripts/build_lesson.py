@@ -213,19 +213,19 @@ def write_player(ep, lesson, segs, notes):
 HANDOUT_CSS = """
 @page{size:A4;margin:14mm 13mm 16mm}
 *{box-sizing:border-box}
-body{margin:0;color:#111;font:10.5pt/1.5 -apple-system,"SF Pro Text","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;background:#eee}
+body{margin:0;color:#1D1D1F;font:10.5pt/1.5 -apple-system,"SF Pro Text","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;background:#F5F5F7}
 .page{max-width:210mm;margin:0 auto;background:#fff;padding:14mm 13mm}
-.tool{position:sticky;top:0;background:#222;color:#fff;padding:8px 12px;display:flex;gap:8px;align-items:center;justify-content:center;font-size:14px;z-index:9}
-.tool button{font:inherit;padding:6px 12px;border-radius:6px;border:1px solid #666;background:#333;color:#fff;cursor:pointer}
-.tool button.on{background:#0F766E;border-color:#0F766E}
-.tool select{font:inherit;padding:5px 6px;border-radius:6px;background:#333;color:#fff;border:1px solid #666}
+.tool{position:sticky;top:0;background:rgba(29,29,31,.92);-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);color:#fff;padding:8px 12px;display:flex;gap:8px;align-items:center;justify-content:center;font-size:14px;z-index:9}
+.tool button{font:inherit;padding:6px 14px;border-radius:999px;border:0;background:rgba(255,255,255,.14);color:#fff;cursor:pointer}
+.tool button.on{background:#0071E3;border-color:#0071E3}
+.tool select{font:inherit;padding:5px 8px;border-radius:8px;background:rgba(255,255,255,.14);color:#fff;border:0}
 .tool .sep{width:1px;height:20px;background:#555;margin:0 4px}
 .seg.off{display:none}
 h1{font-size:17pt;margin:0 0 2mm;line-height:1.25}
 .sub{color:#555;margin-bottom:1mm}
 .meta{color:#555;font-size:9.5pt;margin:2mm 0 4mm}
-.method{background:#F5F4F0;border-radius:3mm;padding:3mm 4mm;margin:0 0 6mm;font-size:9.5pt}
-.method b{color:#0F766E}
+.method{background:#F5F5F7;border-radius:3mm;padding:3mm 4mm;margin:0 0 6mm;font-size:9.5pt}
+.method b{color:#0071E3}
 .method ol{margin:1mm 0 0;padding-left:5mm}
 .seg{margin-top:6mm}
 .seg h2{font-size:12pt;margin:0 0 2mm;padding-bottom:1mm;border-bottom:1.5pt solid #111;display:flex;justify-content:space-between;align-items:baseline}
@@ -243,7 +243,7 @@ body.dict .main .row{grid-template-columns:8mm 1fr}
 body.dict .main .src .line{height:7mm}
 .answers{break-before:page}
 .answers h1{font-size:14pt}
-mark{background:#E3F1EE;color:inherit;border-radius:1mm;padding:0 .5mm}
+mark{background:rgba(0,113,227,.10);color:inherit;border-radius:1mm;padding:0 .5mm}
 table.notes{width:100%;border-collapse:collapse;font-size:9.5pt}
 table.notes th,table.notes td{border-bottom:.4pt solid #ddd;padding:1.6mm 1.5mm;text-align:left;vertical-align:top}
 table.notes td.e{font-weight:700;white-space:nowrap}

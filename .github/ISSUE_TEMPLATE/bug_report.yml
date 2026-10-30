@@ -1,0 +1,29 @@
+name: 问题反馈 / Bug report
+description: 运行出错或效果不对
+labels: [bug]
+body:
+  - type: textarea
+    id: command
+    attributes:
+      label: 运行的命令 / Command
+      placeholder: python3 scripts/lesson.py "6 Minute English"
+    validations:
+      required: true
+  - type: textarea
+    id: result
+    attributes:
+      label: 最后一行 RESULT 输出 / The RESULT line
+      description: 请删掉其中可能出现的密钥 / Remove any secrets
+      render: json
+    validations:
+      required: true
+  - type: textarea
+    id: doctor
+    attributes:
+      label: python3 scripts/lesson.py --doctor 的输出
+      render: json
+  - type: input
+    id: env
+    attributes:
+      label: 系统与 Python 版本 / OS and Python version
+      placeholder: macOS 15, Python 3.12

@@ -1,0 +1,30 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ["3.9", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Compile all scripts
+        run: python -m py_compile scripts/*.py
+      - name: Build a lesson from the bundled sample (no network, no keys)
+        run: |
+          python scripts/build_lesson.py episodes/_sample-intro --no-notes
+          test -s episodes/_sample-intro/player.html
+          test -s episodes/_sample-intro/handout.html
+      - name: CLI reports a structured error without keys
+        run: |
+          out=$(DASHSCOPE_API_KEY= python scripts/lesson.py "x" || true)
+          echo "$out" | tail -1
+          echo "$out" | tail -1 | grep -q '^RESULT {"ok": false, "stage": "env"'
