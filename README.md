@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="docs/brand/cherina-mascot.png" alt="cherina-pod 吉祥物：抱着樱桃的小熊猫" width="140">
+
 # cherina-pod
 
 **一句话，把任意一期播客变成一节精听课。**
@@ -83,7 +85,16 @@ cherina-pod 把这些都自动化了。给它一期播客，它会：
 
 - 每条包含表达、类型、释义、原句、时间点，可以直接放进 Obsidian
 
+## 两种用法
+
+- **交给 AI agent（推荐，最省事）**：一行 `npx skills add realchendahuang/cherina-pod` 装进 Claude Code / Codex / Cursor，之后用大白话说「把这期播客做成精听课」就行。见[作为 Agent Skill 使用](#作为-agent-skill-使用推荐)。
+- **自己用命令行**：`git clone` 下来，跑 `python3 scripts/lesson.py`。见下面的[快速开始](#快速开始)。
+
+两种方式底层是同一套脚本，产物完全一样。
+
 ## 快速开始
+
+> 下面是命令行用法。想让 AI agent 替你跑，直接看[作为 Agent Skill 使用](#作为-agent-skill-使用推荐)。
 
 ### 1. 准备环境
 
@@ -247,17 +258,35 @@ episodes/
 
 设置环境变量 `CHERINA_POD_OUT=/你想放的目录` 可以改到别处。
 
-## 作为 Agent Skill 使用
+## 作为 Agent Skill 使用（推荐）
 
-仓库根目录就是一个完整的 skill（[SKILL.md](SKILL.md) + `scripts/`），克隆到 agent 的 skills 目录即可：
+仓库根目录本身就是一个完整的 skill（[SKILL.md](SKILL.md) + `scripts/`），交给 Claude Code、Codex、Cursor、OpenCode 等 agent，一句话就能调用。
+
+### 一行命令装进你的 agent
+
+用开源的 [`skills` CLI](https://github.com/vercel-labs/skills)（支持 50+ agent），不用手动找目录：
+
+```bash
+# 装到当前项目
+npx skills add realchendahuang/cherina-pod
+
+# 装到用户全局目录（-g），并指定 agent（可多选）
+npx skills add realchendahuang/cherina-pod -g --agent claude-code
+```
+
+或者手动克隆到 agent 的 skills 目录：
 
 ```bash
 # Claude Code
 git clone https://github.com/realchendahuang/cherina-pod.git ~/.claude/skills/cherina-pod
-# WorkBuddy、Codex 等：克隆到各自的 skills 目录
+# Codex、Cursor、OpenCode 等：克隆到各自的 skills 目录
 ```
 
-把密钥放在 `~/.config/cherina-pod/.env`（或 skill 目录下的 `.env`），然后对 agent 说：
+> skill 依赖本机的 **Python 3.10+** 和 **ffmpeg**，装好 skill 后第一次使用时对 agent 说「帮我自检环境」，它会替你跑 `--doctor` 并提示缺什么。
+
+### 填一个密钥，然后说人话
+
+把密钥放在 `~/.config/cherina-pod/.env`（或 skill 目录下的 `.env`，内容是一行 `DASHSCOPE_API_KEY=sk-xxxx`），然后直接对 agent 说：
 
 > 把 6 Minute English 讲金价的那一期做成精听课，我雅思 6 分。
 

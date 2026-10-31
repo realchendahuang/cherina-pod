@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="docs/brand/cherina-mascot.png" alt="cherina-pod mascot: a red panda holding cherries" width="140">
+
 # cherina-pod
 
 **Turn any podcast episode into a listening-practice lesson — with one command.**
@@ -30,7 +32,7 @@ It also **detects and skips ads and sponsor reads**, builds a **single-file less
 
 Default: English audio with Chinese translation. Chinese audio with English translation works too (`--lang zh-en`), which makes it a Mandarin listening tool for English speakers.
 
-Everything runs locally. No account, no upload. Use it from the command line, or install it as an **Agent Skill** for Claude Code, Codex, WorkBuddy and others.
+Everything runs locally. No account, no upload. Use it from the command line, or install it as an **Agent Skill** for Claude Code, Codex, Cursor and others.
 
 <table>
 <tr>
@@ -80,15 +82,25 @@ python3 scripts/lesson.py "<source>" [--episode latest|N|keyword] [--level "B1"]
 
 `Space` play/pause · `←` `→` previous/next line · `R` loop · `T` reveal text · `1`–`4` switch step
 
-## As an Agent Skill
+## As an Agent Skill (recommended)
 
-The repository root is a complete skill ([SKILL.md](SKILL.md) + `scripts/`):
+The repository root is a complete skill ([SKILL.md](SKILL.md) + `scripts/`). Install it into Claude Code, Codex, Cursor, OpenCode and 50+ other agents with one line using the open [`skills` CLI](https://github.com/vercel-labs/skills):
+
+```bash
+# into the current project
+npx skills add realchendahuang/cherina-pod
+
+# into your global dir (-g), for a specific agent
+npx skills add realchendahuang/cherina-pod -g --agent claude-code
+```
+
+Or clone it manually:
 
 ```bash
 git clone https://github.com/realchendahuang/cherina-pod.git ~/.claude/skills/cherina-pod
 ```
 
-Put your key in `~/.config/cherina-pod/.env`, then ask your agent: *"Make a listening lesson from the latest 6 Minute English episode."* The fixed `RESULT` contract lets even small models run it reliably; we tested it with DeepSeek V4.1 Flash.
+The skill needs **Python 3.10+** and **ffmpeg** on your machine. Put your key in `~/.config/cherina-pod/.env`, then ask your agent: *"Make a listening lesson from the latest 6 Minute English episode."* The fixed `RESULT` contract lets even small models run it reliably; we tested it with DeepSeek V4.1 Flash.
 
 ## Where to find podcasts
 
