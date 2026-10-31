@@ -24,7 +24,8 @@ jobs:
           test -s episodes/_sample-intro/player.html
           test -s episodes/_sample-intro/handout.html
       - name: Recommend works offline
-        run: python scripts/lesson.py --recommend --level 四级 | tail -1 | grep -q '"ok": true'
+        run: |
+          python scripts/lesson.py --recommend --level 四级 | tail -1 | grep -q '"ok": true'
       - name: CLI reports a structured error without keys
         run: |
           out=$(DASHSCOPE_API_KEY= python scripts/lesson.py "x" || true)
