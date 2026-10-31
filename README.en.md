@@ -26,6 +26,8 @@ Give it a podcast episode. It downloads the audio, transcribes it with **word-le
 - **`handout.html`** — a printable side-by-side handout with a dictation mode and an answer key. Print to PDF from the browser.
 - **`notes.md`** — key phrases with meaning, original sentence and timestamp. Drop it into Obsidian.
 
+It also **detects and skips ads and sponsor reads**, builds a **single-file lesson with embedded audio** you can AirDrop to your phone, and keeps a **library page** with your streak, saved lines and spaced review.
+
 Default: English audio with Chinese translation. Chinese audio with English translation works too (`--lang zh-en`), which makes it a Mandarin listening tool for English speakers.
 
 Everything runs locally. No account, no upload. Use it from the command line, or install it as an **Agent Skill** for Claude Code, Codex, WorkBuddy and others.
@@ -39,6 +41,11 @@ Everything runs locally. No account, no upload. Use it from the command line, or
 </tr>
 </table>
 
+<table><tr>
+<td align="center" width="62%"><img src="docs/images/library-desktop.png"><br><b>Library</b></td>
+<td align="center" width="38%"><img src="docs/images/share-card.png"><br><b>Share card</b></td>
+</tr></table>
+
 ## Quick start
 
 Requires **Python 3.10+** and **ffmpeg** (`brew install ffmpeg` / `sudo apt install ffmpeg`).
@@ -46,10 +53,10 @@ Requires **Python 3.10+** and **ffmpeg** (`brew install ffmpeg` / `sudo apt inst
 ```bash
 git clone https://github.com/realchendahuang/cherina-pod.git
 cd cherina-pod
-cp .env.example .env          # add DASHSCOPE_API_KEY (Alibaba Cloud Model Studio)
+python3 scripts/lesson.py --setup   # paste your DASHSCOPE_API_KEY (Alibaba Cloud Model Studio)
 python3 scripts/lesson.py --doctor
 python3 scripts/lesson.py "6 Minute English"
-open episodes/<episode>/player.html
+open episodes/index.html
 ```
 
 `DASHSCOPE_API_KEY` is the only required key: it covers transcription (Paraformer) and translation. Get one from [Alibaba Cloud Model Studio](https://www.alibabacloud.com/en/product/modelstudio). To use another OpenAI-compatible model for translation, set `LLM_BASE_URL`, `LLM_API_KEY` and `LLM_MODEL` in `.env`.
@@ -67,7 +74,7 @@ python3 scripts/lesson.py "<source>" [--episode latest|N|keyword] [--level "B1"]
 | RSS feed | `"https://podcasts.files.bbci.co.uk/p02pc9tn.rss"` |
 | Local audio | `~/Downloads/lecture.m4a` |
 
-`--list` shows the 15 most recent episodes. The last line of output is always `RESULT {json}` with file paths on success, or `stage`, `error` and `fix` on failure.
+`--list` shows the 15 most recent episodes. `--recommend --level B1` suggests podcasts for your level. `--serve` shares your library on the local network so you can practise on your phone. Episodes up to 20 minutes also get `share/<episode>.html`, a single file with embedded audio. The last line of output is always `RESULT {json}` with file paths on success, or `stage`, `error` and `fix` on failure.
 
 ### Player shortcuts
 
@@ -89,7 +96,7 @@ Any podcast with a public RSS feed works. Spotify exclusives and YouTube are not
 
 - Directories: [Apple Podcasts](https://podcasts.apple.com/), [Podcast Index](https://podcastindex.org/), [Listen Notes](https://www.listennotes.com/)
 - For English learners: 6 Minute English, VOA Learning English, All Ears English, TED Talks Daily, Hidden Brain, The Daily, This American Life
-- For Mandarin learners (`--lang zh-en`): Coffee Break Chinese, Mandarin Corner, Slow Chinese
+- For Mandarin learners (`--lang zh-en`): Coffee Break Chinese, Mandarin Blueprint, Slow Chinese Podcast
 
 Pick something you understand 70–80% of. Each part in the player shows its speaking rate.
 

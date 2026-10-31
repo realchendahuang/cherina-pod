@@ -4,6 +4,9 @@
   python3 scripts/lesson.py "<来源>" [--episode latest|N|关键词] [--level 水平] [--lang en-zh|zh-en]
   python3 scripts/lesson.py "<来源>" --list        # 只列出最近的单集，不处理
   python3 scripts/lesson.py --doctor               # 检查环境与密钥
+  python3 scripts/lesson.py --setup                # 第一次使用：填密钥并自检
+  python3 scripts/lesson.py --recommend --level 四级 # 按水平推荐播客
+  python3 scripts/lesson.py --serve                # 在局域网打开课程库，手机扫地址直接练
 
 <来源> 可以是：播客名（"6 Minute English"）、RSS 地址、Apple Podcasts 链接、
 iTunes 节目 id，或本地音频文件路径。
@@ -25,7 +28,15 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-from common import http_json, load_env  # noqa: E402
+from common import ENV_PATHS, episodes_root, http_json, load_env  # noqa: E402
+
+CATALOG = HERE / "catalog.json"
+LEVELS = {
+    "beginner": ["入门", "初级", "零基础", "高中", "初中", "a1", "a2", "beginner", "easy"],
+    "intermediate": ["中级", "四级", "六级", "cet", "b1", "b2", "雅思5", "雅思6", "雅思 5", "雅思 6", "托福 80", "intermediate"],
+    "advanced": ["进阶", "高级", "雅思7", "雅思8", "雅思 7", "雅思 8", "专八", "c1", "c2", "托福 100", "advanced", "native"],
+}
+
 
 ITUNES_SEARCH = "https://itunes.apple.com/search"
 ITUNES_LOOKUP = "https://itunes.apple.com/lookup"
@@ -59,12 +70,12 @@ def doctor(online=True):
         checks.append({"check": name, "ok": bool(ok), **({} if ok else {"fix": fix})})
 
     add("python>=3.10", sys.version_info >= (3, 10), "安装 Python 3.10 或更高版本。")
-    add("ffmpeg", shutil.which("ffmpeg"), "安装 ffmpeg：macOS 用 `brew install ffmpeg`，Ubuntu 用 `sudo apt install ffmpeg`。")
+    ff = "brew install ffmpeg" if sys.platform == "darwin" else ("winget install ffmpeg" if os.name == "nt" else "sudo apt install -y ffmpeg")
+    add("ffmpeg", shutil.which("ffmpeg"), f"运行：{ff}")
     add("ffprobe", shutil.which("ffprobe"), "ffprobe 随 ffmpeg 一起安装。")
     has_key = bool(os.environ.get("DASHSCOPE_API_KEY"))
     add("DASHSCOPE_API_KEY", has_key,
-        "复制 .env.example 为 .env，填入阿里云百炼的 API Key（https://bailian.console.aliyun.com/ → API-KEY）。"
-        "也可以放在 ~/.config/cherina-pod/.env。")
+        "运行 python3 scripts/lesson.py --setup 按提示填写；Key 在 https://bailian.console.aliyun.com/ → API-KEY 创建。")
     if online and has_key:
         try:
             import translate
@@ -76,6 +87,161 @@ def doctor(online=True):
             add("llm", False, f"翻译接口不可用：{str(e)[:200]}。可在 .env 配置 LLM_BASE_URL + LLM_API_KEY。")
     ok = all(c["ok"] for c in checks)
     result(ok, 0 if ok else 2, stage="doctor", checks=checks)
+
+
+# ---------------------------------------------------------------- 推荐 / 安装 / 局域网
+def level_of(text):
+    t = (text or "").lower().replace("　", " ")
+    for lvl in ("advanced", "beginner", "intermediate"):
+        if any(k in t for k in LEVELS[lvl]):
+            return lvl
+    return "intermediate"
+
+
+def recommend(level, lang):
+    items = json.loads(CATALOG.read_text(encoding="utf-8"))
+    src = lang.split("-")[0]
+    items = [x for x in items if x["lang"] == src]
+    want = level_of(level)
+    order = {"beginner": ["beginner", "intermediate", "advanced"],
+             "intermediate": ["intermediate", "beginner", "advanced"],
+             "advanced": ["advanced", "intermediate", "beginner"]}[want]
+    items.sort(key=lambda x: order.index(x["level"]))
+    picks = [{"name": x["name"], "level": x["level"], "accent": x["accent"], "why": x["why"], "source": x["feed"]} for x in items[:6]]
+    result(True, stage="recommend", level=want, podcasts=picks,
+           next='python3 scripts/lesson.py "<source>" --level "<水平>"')
+
+
+def setup():
+    import getpass
+
+    cfg = Path.home() / ".config" / "cherina-pod" / ".env"
+    if os.environ.get("DASHSCOPE_API_KEY"):
+        print("已经配置了 DASHSCOPE_API_KEY，直接自检。")
+        doctor()
+    if not sys.stdin.isatty():
+        result(False, 2, stage="setup", error="需要在终端里交互运行",
+               fix=f"在终端运行 python3 scripts/lesson.py --setup，或把 DASHSCOPE_API_KEY=你的Key 写进 {cfg}")
+    print("第一次使用：需要一个阿里云百炼的 API Key（转写、翻译、难点表达都用它）。")
+    print("1. 打开 https://bailian.console.aliyun.com/ 并登录")
+    print("2. 左侧进入「API-KEY」，创建并复制一个 Key\n")
+    key = getpass.getpass("粘贴 Key（输入时不显示）：").strip()
+    if not key:
+        result(False, 2, stage="setup", error="没有输入 Key", fix="重新运行 --setup")
+    cfg.parent.mkdir(parents=True, exist_ok=True)
+    lines = [l for l in (cfg.read_text().splitlines() if cfg.exists() else []) if not l.startswith("DASHSCOPE_API_KEY=")]
+    cfg.write_text("\n".join(lines + [f"DASHSCOPE_API_KEY={key}"]) + "\n")
+    cfg.chmod(0o600)
+    os.environ["DASHSCOPE_API_KEY"] = key
+    print(f"已保存到 {cfg}（仅当前用户可读）。开始自检…")
+    doctor()
+
+
+def lan_ips():
+    """返回本机可能的局域网地址（私有网段优先，跳过 VPN 虚拟网卡常用的 198.18.x）。"""
+    import ipaddress
+    import socket
+
+    found = []
+
+    def add(ip):
+        try:
+            a = ipaddress.ip_address(ip)
+        except ValueError:
+            return
+        if a.version == 4 and a.is_private and not a.is_loopback and not ip.startswith("198.18.") and ip not in found:
+            found.append(ip)
+
+    if sys.platform == "darwin":
+        for iface in ("en0", "en1", "en2"):
+            r = subprocess.run(["ipconfig", "getifaddr", iface], capture_output=True, text=True)
+            add(r.stdout.strip())
+    elif shutil.which("hostname"):
+        r = subprocess.run(["hostname", "-I"], capture_output=True, text=True)
+        for ip in r.stdout.split():
+            add(ip)
+    if found:
+        return found[:2]
+    try:
+        for info in socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET):
+            add(info[4][0])
+    except OSError:
+        pass
+    sk = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        sk.connect(("10.255.255.255", 1))
+        add(sk.getsockname()[0])
+    except OSError:
+        pass
+    finally:
+        sk.close()
+    return found[:2] or ["127.0.0.1"]
+
+
+def serve(port):
+    import functools
+    import http.server
+
+    root = episodes_root()
+    if not (root / "index.html").exists():
+        result(False, 2, stage="serve", error="还没有任何课", fix='先运行 python3 scripts/lesson.py "6 Minute English"')
+    class Handler(http.server.SimpleHTTPRequestHandler):
+        """支持 Range 请求：iPhone 的 Safari 播放音频必须用分段请求。"""
+
+        def log_message(self, *a):
+            pass
+
+        def send_head(self):
+            rng = self.headers.get("Range")
+            path = self.translate_path(self.path)
+            if not rng or not os.path.isfile(path):
+                return super().send_head()
+            m = re.match(r"bytes=(\d*)-(\d*)", rng)
+            size = os.path.getsize(path)
+            if not m:
+                return super().send_head()
+            start = int(m.group(1)) if m.group(1) else max(0, size - int(m.group(2) or 0))
+            end = int(m.group(2)) if m.group(1) and m.group(2) else size - 1
+            if start >= size:
+                self.send_error(416)
+                return None
+            end = min(end, size - 1)
+            f = open(path, "rb")
+            f.seek(start)
+            self.send_response(206)
+            self.send_header("Content-Type", self.guess_type(path))
+            self.send_header("Content-Range", f"bytes {start}-{end}/{size}")
+            self.send_header("Content-Length", str(end - start + 1))
+            self.send_header("Accept-Ranges", "bytes")
+            self.end_headers()
+            self._remain = end - start + 1
+            return f
+
+        def copyfile(self, source, outputfile):
+            remain = getattr(self, "_remain", None)
+            if remain is None:
+                return super().copyfile(source, outputfile)
+            while remain > 0:
+                chunk = source.read(min(65536, remain))
+                if not chunk:
+                    break
+                outputfile.write(chunk)
+                remain -= len(chunk)
+
+    handler = functools.partial(Handler, directory=str(root))
+    urls = [f"http://{ip}:{port}/index.html" for ip in lan_ips()]
+    url = urls[0]
+    print("\n  手机和电脑连同一个 Wi-Fi，在手机浏览器打开：\n")
+    for u in urls:
+        print(f"      {u}")
+    print("\n  打不开的话：关掉电脑上的 VPN / 代理，或检查系统防火墙是否放行 Python。\n")
+    print("  按 Ctrl+C 停止。")
+    print("RESULT " + json.dumps({"ok": True, "stage": "serve", "url": url, "urls": urls}, ensure_ascii=False), flush=True)
+    try:
+        http.server.ThreadingHTTPServer(("0.0.0.0", port), handler).serve_forever()
+    except KeyboardInterrupt:
+        pass
+    sys.exit(0)
 
 
 # ---------------------------------------------------------------- 解析来源
@@ -161,11 +327,23 @@ def main():
     ap.add_argument("--lang", default="en-zh", help="原文-译文：en-zh（默认，英文播客配中文）或 zh-en")
     ap.add_argument("--no-notes", action="store_true", help="不生成难点表达")
     ap.add_argument("--doctor", action="store_true", help="检查环境与密钥")
+    ap.add_argument("--setup", action="store_true", help="第一次使用：填写密钥并自检")
+    ap.add_argument("--recommend", action="store_true", help="按 --level 推荐适合精听的播客")
+    ap.add_argument("--serve", action="store_true", help="在局域网提供课程库，手机打开打印出的地址即可练")
+    ap.add_argument("--port", type=int, default=8765, help="--serve 的端口，默认 8765")
+    ap.add_argument("--phone", action="store_true", help="无论多长都生成手机单文件（长节目建议配合 --parts）")
+    ap.add_argument("--parts", help="手机单文件只包含这几段，例如 1-3")
     args = ap.parse_args()
     load_env()
 
     if args.doctor:
         doctor()
+    if args.setup:
+        setup()
+    if args.recommend:
+        recommend(args.level, args.lang)
+    if args.serve:
+        serve(args.port)
     if not args.source:
         ap.print_help()
         result(False, 2, stage="args", error="缺少来源参数", fix="例：python3 scripts/lesson.py \"6 Minute English\"")
@@ -223,11 +401,15 @@ def main():
     subprocess.run([sys.executable, str(HERE / "translate_titles.py"), str(ep), "--target-lang", tgt_lang],
                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     run_step("align", "align.py", ep, *lang)
+    bil = json.loads((ep / "bilingual.json").read_text(encoding="utf-8"))
+    short = float(bil.get("duration") or 0) <= 20 * 60
     lesson_args = [ep] + (["--level", args.level] if args.level else []) + (["--no-notes"] if args.no_notes else [])
+    if args.phone or args.parts or short:
+        lesson_args += ["--single-file"] + (["--parts", args.parts] if args.parts else [])
     out = run_step("lesson", "build_lesson.py", *lesson_args)
 
-    mm = re.search(r"：(\d+) 句，(\d+) 段，难点 (\d+) 条", out)
-    bil = json.loads((ep / "bilingual.json").read_text(encoding="utf-8"))
+    mm = re.search(r"：(\d+) 句，(\d+) 段，难点 (\d+) 条，跳过广告 (\d+) 句", out)
+    ms = re.search(r"手机单文件：(.+?)（", out)
     result(
         True,
         title=(bil.get("episode") or {}).get("title"),
@@ -239,6 +421,9 @@ def main():
         sentences=int(mm.group(1)) if mm else None,
         segments=int(mm.group(2)) if mm else None,
         key_phrases=int(mm.group(3)) if mm else None,
+        ads_skipped=int(mm.group(4)) if mm else None,
+        phone_file=ms.group(1).strip() if ms else None,
+        library=str(ep.parent / "index.html"),
         audio_minutes=round(float(bil.get("duration") or 0) / 60, 1),
         elapsed_minutes=round((time.time() - t0) / 60, 1),
     )

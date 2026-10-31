@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#F5F5F7" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
+<title>cherina-pod</title>
+<style>
+:root{--bg:#F5F5F7;--surface:#FFFFFF;--ink:#1D1D1F;--ink2:#6E6E73;--ink3:#AEAEB2;--line:#E5E5EA;--track:rgba(118,118,128,.12);
+  --acc:#0071E3;--acc-soft:rgba(0,113,227,.10);--acc-ink:#0066CC;--fire:#FF6B00;--ease:cubic-bezier(.22,.8,.24,1)}
+@media (prefers-color-scheme:dark){:root{--bg:#000;--surface:#1C1C1E;--ink:#F5F5F7;--ink2:#98989D;--ink3:#636366;--line:#2C2C2E;--track:rgba(118,118,128,.24);
+  --acc:#2997FF;--acc-soft:rgba(41,151,255,.16);--acc-ink:#64B5FF}}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 -apple-system,BlinkMacSystemFont,"SF Pro Text","SF Pro Display","Helvetica Neue","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;-webkit-font-smoothing:antialiased}
+a{color:inherit;text-decoration:none}
+button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer}
+.wrap{max-width:1080px;margin:0 auto;padding:calc(28px + env(safe-area-inset-top)) 20px calc(40px + env(safe-area-inset-bottom))}
+.date{font-size:13px;font-weight:600;color:var(--ink2)}
+h1{font-size:34px;font-weight:700;letter-spacing:-.03em;margin:2px 0 22px}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.stat{background:var(--surface);border-radius:20px;padding:16px 18px;box-shadow:0 0 0 .5px rgba(0,0,0,.04)}
+.stat .k{font-size:12.5px;color:var(--ink2);font-weight:500}
+.stat .v{font-size:30px;font-weight:700;letter-spacing:-.03em;margin-top:2px;font-variant-numeric:tabular-nums}
+.stat .v small{font-size:15px;font-weight:600;color:var(--ink2);margin-left:3px}
+.stat.fire .v{color:var(--fire)}
+.stat.rev{cursor:pointer}
+.stat.rev .v{color:var(--acc)}
+.week{display:flex;gap:6px;margin-top:10px}
+.week i{flex:1;height:6px;border-radius:3px;background:var(--line)}
+.week i.on{background:var(--fire)}
+.week i.today{outline:2px solid var(--fire);outline-offset:1px}
+.hero{margin-top:16px;display:flex;align-items:center;gap:18px;background:var(--surface);border-radius:24px;padding:18px;box-shadow:0 0 0 .5px rgba(0,0,0,.04);transition:transform .2s var(--ease)}
+.hero:active{transform:scale(.99)}
+.cover{width:84px;height:84px;border-radius:16px;flex:none;background:linear-gradient(135deg,#5AC8FA,#0071E3);display:grid;place-items:center;color:#fff;font-weight:700;font-size:28px;overflow:hidden}
+.cover img{width:100%;height:100%;object-fit:cover}
+.hero .m{flex:1;min-width:0}
+.hero .kk{font-size:12.5px;font-weight:600;color:var(--acc)}
+.hero .tt{font-size:19px;font-weight:700;letter-spacing:-.02em;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hero .ss{font-size:13.5px;color:var(--ink2);margin-top:2px}
+.go{width:52px;height:52px;border-radius:50%;background:var(--ink);color:var(--surface);display:grid;place-items:center;flex:none}
+h2{font-size:22px;font-weight:700;letter-spacing:-.02em;margin:34px 0 12px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px}
+.card{background:var(--surface);border-radius:20px;padding:14px;box-shadow:0 0 0 .5px rgba(0,0,0,.04);display:flex;flex-direction:column;gap:12px;transition:transform .2s var(--ease)}
+.card:hover{transform:translateY(-2px)}
+.card .top{display:flex;gap:12px;align-items:center}
+.card .cover{width:56px;height:56px;border-radius:12px;font-size:20px}
+.card .tt{font-size:15.5px;font-weight:650;line-height:1.3;letter-spacing:-.01em;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.card .pd{font-size:12.5px;color:var(--ink2);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.meta{display:flex;gap:6px;flex-wrap:wrap}
+.chip{font-size:11.5px;font-weight:600;color:var(--ink2);background:var(--track);padding:3px 8px;border-radius:999px;font-variant-numeric:tabular-nums}
+.pg{height:5px;border-radius:3px;background:var(--line);overflow:hidden}
+.pg i{display:block;height:100%;background:var(--acc);border-radius:3px}
+.pgt{font-size:12px;color:var(--ink3);margin-top:-6px;font-variant-numeric:tabular-nums}
+.links{display:flex;gap:8px}
+.links a{flex:1;text-align:center;font-size:13px;font-weight:600;padding:8px 0;border-radius:12px;background:var(--track)}
+.links a.pri{background:var(--acc);color:#fff}
+.saved{display:grid;gap:8px}
+.sv{background:var(--surface);border-radius:16px;padding:12px 14px;display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center}
+.sv .s{font-size:15px;font-weight:600;line-height:1.4}
+.sv .t{font-size:13px;color:var(--ink2);margin-top:2px}
+.sv .w{font-size:11.5px;color:var(--ink3);margin-top:4px}
+.sv button{width:40px;height:40px;border-radius:50%;background:var(--track);display:grid;place-items:center}
+.empty{color:var(--ink3);font-size:14px;padding:22px;text-align:center;background:var(--surface);border-radius:20px}
+/* 复习 */
+.rv{position:fixed;inset:0;z-index:20;background:var(--bg);display:none;flex-direction:column}
+.rv.on{display:flex}
+.rv-h{display:flex;align-items:center;justify-content:space-between;padding:calc(16px + env(safe-area-inset-top)) 20px 8px}
+.rv-h b{font-size:15px;font-variant-numeric:tabular-nums;color:var(--ink2)}
+.x{width:36px;height:36px;border-radius:50%;background:var(--track);display:grid;place-items:center}
+.rv-b{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px;gap:26px;max-width:640px;margin:0 auto;width:100%}
+.big{width:120px;height:120px;border-radius:50%;background:var(--surface);color:var(--acc);display:grid;place-items:center;box-shadow:0 30px 60px rgba(0,0,0,.1)}
+.flip{width:100%;min-height:150px;background:var(--surface);border-radius:24px;padding:22px;cursor:pointer;display:flex;flex-direction:column;justify-content:center;gap:8px}
+.flip .q{color:var(--ink3);text-align:center;font-size:30px;letter-spacing:.3em}
+.flip .s{font-size:22px;font-weight:700;letter-spacing:-.02em;line-height:1.35}
+.flip .t{font-size:15px;color:var(--ink2)}
+.flip .e{font-size:14px;color:var(--acc-ink);margin-top:6px}
+.flip .w{font-size:12px;color:var(--ink3)}
+.grade{display:none;grid-template-columns:repeat(3,1fr);gap:10px;width:100%}
+.grade.on{display:grid}
+.grade button{height:56px;border-radius:16px;font-weight:650;background:var(--track)}
+.grade button.ok{background:var(--acc);color:#fff}
+.done{font-size:22px;font-weight:700;text-align:center}
+@media (max-width:720px){.stats{grid-template-columns:repeat(2,1fr)}h1{font-size:30px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="date" id="date"></div>
+  <h1 id="h1"></h1>
+  <div class="stats" id="stats"></div>
+  <a class="hero" id="hero"></a>
+  <h2 id="hSaved"></h2>
+  <div class="saved" id="saved"></div>
+  <h2 id="hLib"></h2>
+  <div class="grid" id="grid"></div>
+</div>
+<div class="rv" id="rv">
+  <div class="rv-h"><b id="rvN"></b><button class="x" id="rvX" aria-label="close"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+  <div class="rv-b" id="rvB"></div>
+</div>
+<audio id="au" preload="none"></audio>
+<script type="application/json" id="data">__DATA__</script>
+<script>
+(function(){
+"use strict";
+var D=JSON.parse(document.getElementById("data").textContent),LS=D.lessons;
+var L={zh:{h1:"我的精听",streak:"连续",days:"天",todayMin:"今天",min:"分钟",segs:"累计完成",seg:"段",review:"待复习",item:"句",
+  cont:"继续练习",start:"开始第一课",part:"第 {n} 段",of:"共 {t} 段",lib:"课程库",saved:"收藏的句子",
+  noSaved:"精听或对照时点句子下方的书签，就能收藏到这里",noLessons:"还没有课。运行 python3 scripts/lesson.py “6 Minute English” 生成第一课",
+  practice:"精听",handout:"讲义",min2:"分钟",done:"已完成",tap:"点一下看原文",forgot:"忘了",fuzzy:"模糊",good:"记住了",allDone:"今天的复习完成了",
+  week:["日","一","二","三","四","五","六"]},
+ en:{h1:"Listening",streak:"Streak",days:"days",todayMin:"Today",min:"min",segs:"Parts done",seg:"",review:"To review",item:"",
+  cont:"Continue",start:"Start your first lesson",part:"Part {n}",of:"{t} parts",lib:"Library",saved:"Saved lines",
+  noSaved:"Tap the bookmark under a line to save it here",noLessons:"No lessons yet. Run python3 scripts/lesson.py “6 Minute English”",
+  practice:"Practice",handout:"Handout",min2:"min",done:"done",tap:"Tap to reveal",forgot:"Forgot",fuzzy:"Hard",good:"Got it",allDone:"All caught up",
+  week:["S","M","T","W","T","F","S"]}}[D.ui||"zh"];
+function $(id){return document.getElementById(id);}
+function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];});}
+function f(s,o){return s.replace(/\{(\w+)\}/g,function(_,k){return o[k];});}
+function readJ(k,d){try{return JSON.parse(localStorage.getItem(k)||"null")||d;}catch(e){return d;}}
+function writeJ(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}}
+function key(x){return x.getFullYear()+"-"+String(x.getMonth()+1).padStart(2,"0")+"-"+String(x.getDate()).padStart(2,"0");}
+function mins(sec){return Math.round((sec||0)/60);}
+function cover(l,big){var t=(l.podcast||l.title||"?").trim().charAt(0).toUpperCase();
+  return '<div class="cover">'+(l.image?'<img src="'+esc(l.image)+'" alt="" onerror="this.remove()">':'')+'<span>'+esc(t)+'</span></div>';}
+function prog(l){var st=readJ("cherina-lesson:"+l.id,{}),steps=st.steps||{},d=0;for(var k in steps)if(steps[k]>=4)d++;
+  var next=1;for(var n=1;n<=l.segments;n++){if((steps[n]||0)<4){next=n;break;}next=n;}return {done:Math.min(d,l.segments),next:next,touched:!!st.steps};}
+
+var ACT=readJ("cherina-pod:activity",{days:{}}).days,SAV=readJ("cherina-pod:saved",[]);
+function on(x){var v=ACT[key(x)];return !!(v&&((v.segs||0)>0||(v.sec||0)>=120));}
+function streak(){var n=0,d=new Date();if(!on(d))d.setDate(d.getDate()-1);while(on(d)){n++;d.setDate(d.getDate()-1);}return n;}
+var now=new Date(),todayV=ACT[key(now)]||{},total=0;for(var k in ACT)total+=ACT[k].segs||0;
+var due=SAV.filter(function(x){return (x.due||0)<=Date.now();});
+
+$("date").textContent=now.toLocaleDateString(D.ui==="zh"?"zh-CN":"en-US",{month:"long",day:"numeric",weekday:"long"});
+$("h1").textContent=L.h1;document.title="cherina-pod · "+L.h1;
+var wk="";for(var i=6;i>=0;i--){var x=new Date();x.setDate(x.getDate()-i);wk+='<i class="'+(on(x)?"on":"")+(i===0?" today":"")+'" title="'+key(x)+'"></i>';}
+$("stats").innerHTML=
+  '<div class="stat fire"><div class="k">'+L.streak+'</div><div class="v">'+streak()+'<small>'+L.days+'</small></div><div class="week">'+wk+'</div></div>'+
+  '<div class="stat"><div class="k">'+L.todayMin+'</div><div class="v">'+mins(todayV.sec)+'<small>'+L.min+'</small></div></div>'+
+  '<div class="stat"><div class="k">'+L.segs+'</div><div class="v">'+total+'<small>'+L.seg+'</small></div></div>'+
+  '<div class="stat rev" id="stRev"><div class="k">'+L.review+'</div><div class="v">'+due.length+'<small>'+L.item+'</small></div></div>';
+
+// 继续练习：上次练的那一课；练完了就找下一个没完成的
+var last=readJ("cherina-pod:last",null),pick=null;
+if(last)pick=LS.filter(function(l){return l.id===last.id;})[0];
+if(pick&&prog(pick).done>=pick.segments)pick=null;
+if(!pick)pick=LS.filter(function(l){return prog(l).done<l.segments;})[0]||LS[0];
+var hero=$("hero");
+if(pick){var p=prog(pick);hero.href=encodeURI(pick.dir)+"/player.html#seg="+p.next;
+  hero.innerHTML=cover(pick)+'<div class="m"><div class="kk">'+(p.touched?L.cont:L.start)+' · '+f(L.part,{n:p.next})+'</div><div class="tt">'+esc(pick.title)+'</div><div class="ss">'+esc(pick.podcast)+' · '+f(L.of,{t:pick.segments})+'</div></div>'+
+  '<span class="go"><svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M8.2 5.6v12.8a1.2 1.2 0 0 0 1.84 1.02l10.1-6.4a1.2 1.2 0 0 0 0-2.04l-10.1-6.4A1.2 1.2 0 0 0 8.2 5.6z"/></svg></span>';}
+else hero.outerHTML='<div class="empty">'+L.noLessons+'</div>';
+
+$("hLib").textContent=L.lib;
+$("grid").innerHTML=LS.map(function(l){var p=prog(l),pct=Math.round(p.done/Math.max(1,l.segments)*100),u=l.rate_unit==="cpm"?"字/分":(D.ui==="zh"?"词/分":"wpm");
+  return '<div class="card"><div class="top">'+cover(l)+'<div style="min-width:0"><div class="tt">'+esc(l.title)+'</div><div class="pd">'+esc(l.podcast)+'</div></div></div>'+
+    '<div class="meta"><span class="chip">'+Math.round(l.duration/60)+' '+L.min2+'</span><span class="chip">'+l.rate+' '+u+'</span><span class="chip">'+f(L.of,{t:l.segments})+'</span></div>'+
+    '<div class="pg"><i style="width:'+pct+'%"></i></div><div class="pgt">'+p.done+' / '+l.segments+' '+L.done+'</div>'+
+    '<div class="links"><a class="pri" href="'+encodeURI(l.dir)+'/player.html#seg='+p.next+'">'+L.practice+'</a><a href="'+encodeURI(l.dir)+'/handout.html">'+L.handout+'</a></div></div>';}).join("");
+
+$("hSaved").textContent=L.saved+(SAV.length?" "+SAV.length:"");
+var au=$("au"),stopAt=0;
+au.addEventListener("timeupdate",function(){if(stopAt&&au.currentTime>=stopAt){au.pause();stopAt=0;}});
+function playClip(x){au.src=encodeURI(x.dir)+"/audio/episode.mp4";au.currentTime=0;
+  var go=function(){au.currentTime=x.a;stopAt=x.b+0.15;au.play().catch(function(){});};
+  if(au.readyState>=1)go();else au.addEventListener("loadedmetadata",go,{once:true});au.load();}
+function renderSaved(){
+  var list=SAV.slice().sort(function(a,b){return (b.at||0)-(a.at||0);}).slice(0,8);
+  $("saved").innerHTML=list.length?list.map(function(x,i){return '<div class="sv"><div><div class="s">'+esc(x.s)+'</div><div class="t">'+esc(x.t)+'</div><div class="w">'+esc(x.title)+'</div></div><button data-k="'+esc(x.k)+'" aria-label="play"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8.2 5.6v12.8a1.2 1.2 0 0 0 1.84 1.02l10.1-6.4a1.2 1.2 0 0 0 0-2.04l-10.1-6.4A1.2 1.2 0 0 0 8.2 5.6z"/></svg></button></div>';}).join(""):'<div class="empty">'+L.noSaved+'</div>';
+  $("saved").querySelectorAll("button").forEach(function(b){b.onclick=function(){playClip(SAV.filter(function(x){return x.k===b.dataset.k;})[0]);};});
+}
+renderSaved();
+
+// 间隔复习：先听后看
+var queue=[],qi=0;
+function openReview(){queue=SAV.filter(function(x){return (x.due||0)<=Date.now();});if(!queue.length)queue=SAV.slice(0,10);qi=0;$("rv").classList.add("on");showCard();}
+function showCard(){
+  var b=$("rvB");
+  if(qi>=queue.length){b.innerHTML='<div class="done">'+L.allDone+'</div>';$("rvN").textContent="";return;}
+  var x=queue[qi];$("rvN").textContent=(qi+1)+" / "+queue.length;
+  b.innerHTML='<button class="big" id="rvP" aria-label="play"><svg width="44" height="44" viewBox="0 0 24 24" fill="currentColor"><path d="M8.2 5.6v12.8a1.2 1.2 0 0 0 1.84 1.02l10.1-6.4a1.2 1.2 0 0 0 0-2.04l-10.1-6.4A1.2 1.2 0 0 0 8.2 5.6z"/></svg></button>'+
+    '<div class="flip" id="rvF"><div class="q">· · ·</div></div><div class="grade" id="rvG"><button data-g="0">'+L.forgot+'</button><button data-g="1">'+L.fuzzy+'</button><button data-g="2" class="ok">'+L.good+'</button></div>';
+  $("rvP").onclick=function(){playClip(x);};playClip(x);
+  $("rvF").onclick=function(){this.innerHTML='<div class="s">'+esc(x.s)+'</div><div class="t">'+esc(x.t)+'</div>'+(x.expr?'<div class="e">'+esc(x.expr)+(x.explain?' — '+esc(x.explain):'')+'</div>':'')+'<div class="w">'+esc(x.title)+'</div>';$("rvG").classList.add("on");};
+  $("rvG").querySelectorAll("button").forEach(function(btn){btn.onclick=function(){
+    var g=+btn.dataset.g,DAY=864e5;
+    if(g===0){x.iv=0;x.due=Date.now()+6e5;}else if(g===1){x.iv=Math.max(1,(x.iv||0)*1.2);x.due=Date.now()+x.iv*DAY;}else{x.iv=(x.iv||0)<1?1:x.iv*2.5;x.due=Date.now()+x.iv*DAY;}
+    x.reps=(x.reps||0)+1;var all=readJ("cherina-pod:saved",[]);all.forEach(function(y){if(y.k===x.k){y.iv=x.iv;y.due=x.due;y.reps=x.reps;}});writeJ("cherina-pod:saved",all);
+    qi++;showCard();};});
+}
+$("stRev").onclick=function(){if(SAV.length)openReview();};
+$("rvX").onclick=function(){au.pause();$("rv").classList.remove("on");location.reload();};
+})();
+</script>
+</body>
+</html>

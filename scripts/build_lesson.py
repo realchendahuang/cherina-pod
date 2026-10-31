@@ -59,6 +59,7 @@ def load_episode(ep: Path):
         "target_lang": d.get("target_lang") or "zh",
         "duration": float(d.get("duration") or (sents[-1]["b"] if sents else 0)),
         "audio": d.get("audio") or "audio/episode.mp4",
+        "image": epi.get("image") or pod.get("image") or "",
         "sentences": sents,
     }
 
@@ -185,11 +186,83 @@ def generate_notes(lesson, k, level):
             s = by_n.get(n)
             if not s or not expr or expr.lower() not in s["s"].lower():
                 continue  # 丢掉对不上原句的条目，防止模型编造
-            notes.append({"n": n, "expr": expr, "type": str(it.get("type") or "").strip(),
+            notes.append({"n": n, "src": s["s"], "expr": expr, "type": str(it.get("type") or "").strip(),
                           "explain": str(it.get("explain") or "").strip()})
         print(f"  难点表达：第 {ci + 1}/{len(chunks)} 块，保留 {len(notes)} 条")
     notes.sort(key=lambda x: x["n"])
     return notes
+
+
+# ---------------------------------------------------------------- 广告识别
+AD_WORDS = re.compile(
+    r"sponsor|supported by|brought to you|promo code|discount|sign up|subscribe|free trial|"
+    r"\bdot com\b|\.com\b|visit |download the|this podcast is|advertis|赞助|广告|优惠码",
+    re.I,
+)
+
+
+def detect_ads(lesson):
+    """返回广告 / 赞助口播句的原文列表。模型先标区间，再用规则兜底，避免误删正文。"""
+    import translate
+
+    providers = sorted(translate.available_providers(), key=lambda p: 0 if p.get("preferred") else 1)
+    sents = lesson["sentences"]
+    total = len(sents)
+    flagged = set()
+    for i in range(0, total, 250):
+        part = sents[i : i + 250]
+        listing = "\n".join(f'{x["n"]}: {x["s"]}' for x in part)
+        msgs = [
+            {"role": "system", "content": "You label podcast transcripts. Output JSON only."},
+            {"role": "user", "content": (
+                "Below is a numbered podcast transcript. Find every advertisement, sponsor read, "
+                "promotion of other shows or apps, and 'support us / subscribe' appeal. These are NOT episode content. "
+                "Do not mark the hosts' normal greeting or the topic itself.\n"
+                "Output a JSON array of [first, last] sentence-number ranges, e.g. [[1,7],[88,92]]. Output [] if none.\n\n"
+                + listing
+            )},
+        ]
+        items = None
+        for prov in providers:
+            try:
+                items = _parse_json_array(translate.chat_completion_retry(prov, msgs, max_tokens=6000, attempts=3))
+                break
+            except (RuntimeError, ValueError, json.JSONDecodeError):
+                continue
+        if items is None:
+            raise RuntimeError("广告识别失败")
+        by_n = {x["n"]: x for x in part}
+        for r in items:
+            try:
+                a, b = int(r[0]), int(r[-1])
+            except (TypeError, ValueError, IndexError):
+                continue
+            run = [by_n[k] for k in range(a, b + 1) if k in by_n]
+            if not run:
+                continue
+            edge = run[0]["n"] <= max(3, total * 0.12) or run[-1]["n"] >= total * 0.9
+            kw = any(AD_WORDS.search(x["s"]) for x in run)
+            # 单句、不在首尾、也没有广告词的，不信模型，避免误删正文
+            if kw or (edge and len(run) >= 2) or len(run) >= 3:
+                flagged.update(x["s"] for x in run)
+    return sorted(flagged)
+
+
+def drop_ads(lesson, ad_texts):
+    """从课里去掉广告句并重新编号。返回 旧句号 → 新句号 的映射。"""
+    ads = set(ad_texts)
+    keep, remap = [], {}
+    before = len(lesson["sentences"])
+    for s in lesson["sentences"]:
+        if s["s"] in ads:
+            continue
+        remap[s["n"]] = len(keep) + 1
+        keep.append(s)
+    for i, s in enumerate(keep):
+        s["n"] = i + 1
+    lesson["sentences"] = keep
+    lesson["ads_removed"] = before - len(keep)
+    return remap
 
 
 # ---------------------------------------------------------------- 输出
@@ -199,15 +272,16 @@ def mmss(t):
     return f"{h}:{m:02d}:{s:02d}" if h else f"{m}:{s:02d}"
 
 
-def write_player(ep, lesson, segs, notes):
+def write_player(ep, lesson, segs, notes, dest=None):
     data = {k: v for k, v in lesson.items()}
     data["segments"] = segs
     data["notes"] = notes
     data["rate_unit"] = "cpm" if lesson["source_lang"].startswith(("zh", "ja", "ko")) else "wpm"
+    data.setdefault("dir", ep.name)
     blob = json.dumps(data, ensure_ascii=False, separators=(",", ":")).replace("</", "<\\/")
     tpl = (TEMPLATES / "player.html").read_text(encoding="utf-8")
     out = tpl.replace("__TITLE__", html.escape(lesson["title"])).replace("__DATA__", blob)
-    (ep / "player.html").write_text(out, encoding="utf-8")
+    (dest or ep / "player.html").write_text(out, encoding="utf-8")
 
 
 HANDOUT_CSS = """
@@ -384,14 +458,130 @@ def write_notes_md(ep, lesson, notes):
     (ep / "notes.md").write_text("\n".join(lines), encoding="utf-8")
 
 
+def remap_notes(notes, lesson, remap):
+    """把缓存的难点表达对到去掉广告后的新句号：优先按原句文本，旧缓存按句号映射。"""
+    by_text = {x["s"]: x["n"] for x in lesson["sentences"]}
+    out = []
+    for x in notes:
+        n = by_text.get(x.get("src")) if x.get("src") else remap.get(x.get("n"))
+        if not n:
+            continue
+        s = lesson["sentences"][n - 1]
+        if x["expr"].lower() not in s["s"].lower():
+            continue
+        out.append({**x, "n": n, "src": s["s"]})
+    return out
+
+
+def write_single_file(ep, lesson, segs, notes, parts=None):
+    """把音频内嵌进 HTML，生成一个能直接发到手机上的单文件。返回路径。"""
+    import base64
+    import subprocess
+    import tempfile
+
+    if parts:
+        a, b = parts
+        segs = [g for g in segs if a <= g["n"] <= b]
+        if not segs:
+            raise ValueError(f"没有第 {a}–{b} 段")
+    t0 = max(0.0, segs[0]["start"] - 0.3)
+    t1 = segs[-1]["end"] + 0.3
+    lo, hi = segs[0]["from"], segs[-1]["to"]
+
+    def shift(v):
+        return round(v - t0, 3)
+
+    sents = []
+    for x in lesson["sentences"][lo:hi]:
+        y = dict(x)
+        y["a"], y["b"] = shift(x["a"]), shift(x["b"])
+        if x.get("w"):
+            y["w"] = [shift(w) for w in x["w"]]
+        sents.append(y)
+    # 句子数组从 lo 开始，段落的 from / to 也要平移
+    new_segs = [{**g, "from": g["from"] - lo, "to": g["to"] - lo, "start": shift(g["start"]), "end": shift(g["end"])} for g in segs]
+    keep_n = {x["n"] for x in sents}
+    first_n = sents[0]["n"]
+    # 句号保留原编号（和讲义一致），播放器按数组下标定位，所以难点表达的 n 要换成数组下标 + 1 的体系
+    for k, x in enumerate(sents):
+        x["orig_n"] = x["n"]
+    sub_notes = [{**x, "n": x["n"] - first_n + 1} for x in notes if x["n"] in keep_n]
+
+    src = ep / lesson["audio"]
+    with tempfile.TemporaryDirectory() as td:
+        out_audio = Path(td) / "a.m4a"
+        r = subprocess.run(
+            ["ffmpeg", "-y", "-v", "error", "-nostdin", "-ss", f"{t0:.3f}", "-to", f"{t1:.3f}", "-i", str(src),
+             "-vn", "-ac", "1", "-c:a", "aac", "-b:a", "40k", "-movflags", "+faststart", str(out_audio)],
+            capture_output=True, text=True,
+        )
+        if r.returncode or not out_audio.exists():
+            raise RuntimeError(f"ffmpeg 裁剪音频失败：{r.stderr[-300:]}")
+        b64 = base64.b64encode(out_audio.read_bytes()).decode("ascii")
+
+    one = {**lesson, "sentences": [{**x, "n": k + 1} for k, x in enumerate(sents)]}
+    for k, x in enumerate(one["sentences"]):
+        x["label"] = sents[k]["orig_n"]
+    one["audio"] = "data:audio/mp4;base64," + b64
+    one["standalone"] = True
+    one["id"] = lesson["id"] + (f"-p{parts[0]}-{parts[1]}" if parts else "")
+    share = ep / "share"
+    share.mkdir(exist_ok=True)
+    name = f'{lesson["id"]}{f"-part{parts[0]}-{parts[1]}" if parts else ""}.html'
+    dest = share / name
+    write_player(ep, one, new_segs, sub_notes, dest=dest)
+    return dest
+
+
+def write_meta(ep, lesson, segs, notes):
+    meta = {
+        "id": lesson["id"],
+        "dir": ep.name,
+        "title": lesson["title"],
+        "title_target": lesson["title_target"],
+        "podcast": lesson["podcast"],
+        "image": lesson.get("image") or "",
+        "duration": lesson["duration"],
+        "segments": len(segs),
+        "sentences": len(lesson["sentences"]),
+        "rate": round(sum(g["rate"] for g in segs) / max(1, len(segs))),
+        "rate_unit": "cpm" if lesson["source_lang"].startswith(("zh", "ja", "ko")) else "wpm",
+        "notes": len(notes),
+        "target_lang": lesson["target_lang"],
+        "built_at": __import__("time").strftime("%Y-%m-%dT%H:%M:%S"),
+    }
+    (ep / "lesson.json").write_text(json.dumps(meta, ensure_ascii=False, indent=1), encoding="utf-8")
+
+
+def write_index(root):
+    """在产物根目录生成课程库 index.html：列出所有课、连续天数、复习入口。"""
+    items = []
+    for f in sorted(root.glob("*/lesson.json")):
+        if f.parent.name.startswith("_"):
+            continue  # 样例不进课程库
+        try:
+            items.append(json.loads(f.read_text(encoding="utf-8")))
+        except (OSError, json.JSONDecodeError):
+            continue
+    items.sort(key=lambda x: x.get("built_at", ""), reverse=True)
+    ui = "zh" if not items or items[0].get("target_lang", "zh").startswith("zh") else "en"
+    blob = json.dumps({"lessons": items, "ui": ui}, ensure_ascii=False, separators=(",", ":")).replace("</", "<\\/")
+    tpl = (TEMPLATES / "index.html").read_text(encoding="utf-8")
+    (root / "index.html").write_text(tpl.replace("__DATA__", blob), encoding="utf-8")
+    return root / "index.html"
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("episode_dir")
     ap.add_argument("--seg-seconds", type=float, default=150, help="每段目标时长（秒），默认 150")
     ap.add_argument("--notes", type=int, default=20, help="难点表达条数，默认 20")
     ap.add_argument("--level", default="中级（四六级 / 雅思 6 左右）", help="学习者水平，影响难点挑选")
-    ap.add_argument("--no-notes", action="store_true", help="不生成难点表达（不调用 LLM）")
-    ap.add_argument("--force-notes", action="store_true", help="忽略 notes.json 缓存重新生成")
+    ap.add_argument("--no-notes", action="store_true", help="不调用 LLM：不生成难点表达，也不识别广告")
+    ap.add_argument("--force-notes", action="store_true", help="忽略缓存，重新生成难点表达和广告识别")
+    ap.add_argument("--keep-ads", action="store_true", help="保留广告 / 赞助口播句")
+    ap.add_argument("--single-file", action="store_true", help="另外生成内嵌音频的单文件课（share/ 目录），可直接发到手机")
+    ap.add_argument("--parts", help="单文件只包含这几段，例如 1-2（长节目建议使用）")
     args = ap.parse_args()
 
     ep = Path(args.episode_dir).resolve()
@@ -402,34 +592,74 @@ def main():
     if not lesson["sentences"]:
         print("bilingual.json 里没有句子", file=sys.stderr)
         return 2
+    use_llm = not args.no_notes
+    if use_llm:
+        load_env()
+
+    # 1. 广告：缓存在 ads.json（原文列表），按文本匹配，不受句号变化影响
+    remap = {x["n"]: x["n"] for x in lesson["sentences"]}
+    ads_cache = ep / "ads.json"
+    ad_texts = []
+    if not args.keep_ads:
+        if ads_cache.exists() and not args.force_notes:
+            ad_texts = json.loads(ads_cache.read_text(encoding="utf-8"))
+        elif use_llm:
+            try:
+                ad_texts = detect_ads(lesson)
+                ads_cache.write_text(json.dumps(ad_texts, ensure_ascii=False, indent=1), encoding="utf-8")
+            except (RuntimeError, SystemExit) as e:
+                print(f"⚠ 广告识别未完成：{e}", file=sys.stderr)
+        if ad_texts:
+            remap = drop_ads(lesson, ad_texts)
+
     cjk = lesson["source_lang"].startswith(("zh", "ja", "ko"))
     segs = segment(lesson["sentences"], args.seg_seconds, cjk)
 
+    # 2. 难点表达
     notes = []
     cache = ep / "notes.json"
-    if not args.no_notes:
+    if use_llm:
         if cache.exists() and not args.force_notes:
-            notes = json.loads(cache.read_text(encoding="utf-8"))
+            notes = remap_notes(json.loads(cache.read_text(encoding="utf-8")), lesson, remap)
         else:
-            load_env()
             try:
                 notes = generate_notes(lesson, args.notes, args.level)
                 cache.write_text(json.dumps(notes, ensure_ascii=False, indent=1), encoding="utf-8")
             except (RuntimeError, SystemExit) as e:
                 print(f"⚠ 难点表达未生成：{e}（讲义和网页照常输出）", file=sys.stderr)
-                notes = []
 
     write_player(ep, lesson, segs, notes)
     write_handout(ep, lesson, segs, notes)
     if notes:
         write_notes_md(ep, lesson, notes)
+    write_meta(ep, lesson, segs, notes)
+    index = write_index(ep.parent)
+
+    share = None
+    if args.single_file:
+        parts = None
+        if args.parts:
+            m = re.fullmatch(r"(\d+)(?:-(\d+))?", args.parts.strip())
+            if not m:
+                print("--parts 格式应为 1-2", file=sys.stderr)
+                return 2
+            parts = (int(m.group(1)), int(m.group(2) or m.group(1)))
+        try:
+            share = write_single_file(ep, lesson, segs, notes, parts)
+        except (RuntimeError, ValueError) as e:
+            print(f"⚠ 单文件课未生成：{e}", file=sys.stderr)
+
     if not (ep / lesson["audio"]).exists():
         print(f"⚠ 没找到音频 {lesson['audio']}，player.html 将无法播放", file=sys.stderr)
-    print(f"✅ {lesson['title']}：{len(lesson['sentences'])} 句，{len(segs)} 段，难点 {len(notes)} 条")
+    ads_n = lesson.get("ads_removed", 0)
+    print(f"✅ {lesson['title']}：{len(lesson['sentences'])} 句，{len(segs)} 段，难点 {len(notes)} 条，跳过广告 {ads_n} 句")
     print(f"  精听网页：{ep / 'player.html'}")
     print(f"  打印讲义：{ep / 'handout.html'}")
     if notes:
         print(f"  难点笔记：{ep / 'notes.md'}")
+    if share:
+        print(f"  手机单文件：{share}（{share.stat().st_size / 1e6:.1f} MB）")
+    print(f"  课程库：{index}")
     return 0
 
 

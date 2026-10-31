@@ -120,3 +120,23 @@
 | M2 | 接入流水线，打包成 skill，跑通一句话生成 |
 | M3 | 你自己用 2–4 周，在小红书发内容验证需求 |
 | M4 | 面向卖家的批量与品牌定制；可选二维码 |
+
+## 14. v0.2 改进（2026-10-31，已实现）
+
+基于用户路径分析的 7 个断点：
+
+| 断点 | 方案 | 实现 |
+|---|---|---|
+| 装上用起来 | `--setup` 交互式填 Key 写入 `~/.config/cherina-pod/.env`；`--doctor` 的修复建议改为可直接执行的命令 | `scripts/lesson.py` |
+| 选内容 | 内置 17 档已核实可搜到的播客目录，`--recommend --level` 按水平推荐；课程库和段落显示语速 | `scripts/catalog.json` |
+| 手机上练 | 20 分钟以内自动生成内嵌音频的单文件课；长节目 `--phone --parts`；`--serve` 局域网课程库（支持 Range，iPhone 可播放） | `build_lesson.py --single-file`、`lesson.py --serve` |
+| 广告 | 模型标区间 + 规则兜底（单句且不在首尾、无广告用语的不删），删除后重新编号，播放时跳过空隙 | `build_lesson.py detect_ads`、`ads.json` |
+| 记得住 | 书签收藏，课程库里“先听后看”的间隔复习（忘了 10 分钟 / 模糊 ×1.2 / 记住 ×2.5） | `player.html`、`index.html` |
+| 坚持 | 课程库：连续天数、近 7 天打卡、今日分钟、累计段数、继续练习 | `episodes/index.html` |
+| 晒出去 | 结果页一键生成 1080×1440 分享卡片（手机走系统分享，电脑下载） | `player.html shareCard` |
+
+未做（留待反馈）：本地 ASR、听写比对、Anki 导出、影子跟读、YouTube。
+
+已知限制：
+- 学习记录存在 localStorage。Chromium 下所有 `file://` 页面共享存储（已实测）；Safari / Firefox 对本地文件的存储隔离更严格，课程库可能读不到各课进度，此时用 `--serve` 打开。
+- 单文件课在 iPhone 上需要用 Safari 打开，微信内置浏览器和“文件”预览不执行脚本。尚未在真机上验证。

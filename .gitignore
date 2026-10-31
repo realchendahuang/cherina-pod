@@ -18,27 +18,12 @@ __pycache__/
 venv/
 
 # ── 跑出来的内容一律不入库 ─────────────────────────────────────────────
-# 音频体积大，且是第三方内容
-episodes/*/audio/
-episodes/*/*.mp3
-episodes/*/*.m4a
-episodes/*/*.wav
-# 原始 LLM 产物（中间态，bilingual.json 才是下游唯一需要的）
-episodes/*/translation.json
-# 第三方播客的转写 / 译文 / 元数据：这些是你花钱跑出来的**你自己**的内容，
-# 属于你的本地数据，不属于开源仓库。
-# ⚠️ transcript.json 含词级时间戳，是重新转写成本最高的那份数据 ——
-#    它现在只存在于你的工作区，请自行做私有备份（见 README「数据契约」）。
-episodes/*/transcript.json
-episodes/*/bilingual.json
-episodes/*/meta.json
-# 生成的精听课（含第三方原文与译文）
-episodes/*/player.html
-episodes/*/handout.html
-episodes/*/notes.md
-episodes/*/notes.json
-# 例外：合成样例（人工编写、非真实内容）必须入库，供新 clone 跑通流程。
-# 注意要逐文件反忽略——只反忽略目录不生效（git 不会因目录被重新包含而放行其中的文件）
+# episodes/ 下全部是第三方播客的音频、转写、译文、讲义和课程库，属于你的本地数据。
+# ⚠ transcript.json 含词级时间戳，重新转写要花钱，请自行备份。
+episodes/*
+# 例外：合成样例（人工编写、非真实内容），供新 clone 和 CI 跑通流程
+!episodes/_sample-intro/
+episodes/_sample-intro/*
 !episodes/_sample-intro/bilingual.json
 !episodes/_sample-intro/meta.json
 !episodes/_sample-intro/transcript.json

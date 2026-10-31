@@ -4,7 +4,7 @@
 
 **一句话，把任意一期播客变成一节精听课。**
 
-逐句精听网页 · 可打印双语讲义 · 难点表达笔记 —— 全部在你自己的电脑上生成
+逐句精听网页 · 可打印双语讲义 · 难点表达笔记 · 自动跳过广告 · 手机直接练 —— 全部在你自己的电脑上生成
 
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
@@ -27,8 +27,10 @@ cherina-pod 把这些都自动化了。给它一期播客，它会：
 
 1. 下载音频，转写出**带词级时间戳**的原文
 2. 逐句翻译（信达雅，保留口语感）
-3. 挑出这一期最值得学的 20 个难点表达
-4. 生成一个**离线精听网页**和一份**可打印讲义**
+3. **自动识别并跳过广告和赞助口播**
+4. 按你的水平挑出这一期最值得学的 20 个难点表达
+5. 生成**离线精听网页**、**可打印讲义**和一个能直接发到手机上的**单文件课**
+6. 把所有课汇总进**课程库**，记录连续打卡、收藏的句子和复习计划
 
 全程在本地运行，不需要注册，不上传你的数据。可以直接当命令行工具用，也可以作为 **Agent Skill** 交给 Claude Code、WorkBuddy、Codex 等 agent，一句话调用。
 
@@ -43,6 +45,15 @@ cherina-pod 把这些都自动化了。给它一期播客，它会：
 </tr>
 </table>
 
+<table>
+<tr>
+<td align="center" width="62%"><img src="docs/images/library-desktop.png" alt="课程库：连续打卡、继续练习、收藏、课程列表"><br><b>课程库</b><br><sub>连续天数、今天练了多久、继续上次那一段、收藏的句子</sub></td>
+<td align="center" width="38%"><img src="docs/images/share-card.png" alt="分享卡片"><br><b>一键生成分享卡片</b><br><sub>3:4 竖图，直接发小红书 / 朋友圈</sub></td>
+</tr>
+</table>
+
+<sub>截图里的打卡数据为演示用。</sub>
+
 ### 精听网页 `player.html`
 
 - **四步精听法，自动往下走**：盲听 → 逐句精听 → 对照 → 再盲听。只需要按播放键和“下一句”，每一步结束会自动进入下一步
@@ -50,7 +61,17 @@ cherina-pod 把这些都自动化了。给它一期播客，它会：
 - **单句循环、0.75–1.25 倍速、点进度条任意一格跳到那一句**
 - **难点表达**：原文里带下划线，点开看释义和原句
 - **两遍自评对比**：第一遍和第二遍盲听各打一次分，练完看到进步幅度
+- **自动跳过广告**：片头片尾的广告、赞助口播、其他节目的推广都会被识别出来，播放时直接跳过
+- **收藏句子**：点书签收藏，回到课程库用“先听后看”的卡片复习
+- **分享卡片**：练完一段，一键生成带进步幅度和连续天数的竖版图片
 - 双击即开、完全离线；手机、电脑、深色模式都适配；进度保存在浏览器里
+
+### 课程库 `episodes/index.html`
+
+- 连续打卡天数、近 7 天打卡条、今天练习分钟数、累计完成段数
+- “继续练习”一键回到上次那一段
+- 收藏的句子与**间隔复习**：先播放原句，回想意思，再翻面；按“忘了 / 模糊 / 记住了”安排下次复习
+- 所有课的进度一览
 
 ### 打印讲义 `handout.html`
 
@@ -80,14 +101,16 @@ sudo apt install ffmpeg
 ```bash
 git clone https://github.com/realchendahuang/cherina-pod.git
 cd cherina-pod
-cp .env.example .env
+python3 scripts/lesson.py --setup
 ```
 
-打开 `.env`，填上 `DASHSCOPE_API_KEY`。这是**唯一必需**的密钥，转写、翻译、难点表达都用它：
+`--setup` 会请你粘贴一个 `DASHSCOPE_API_KEY`，保存后自动自检。这是**唯一必需**的密钥，转写、翻译、难点表达都用它：
 
 1. 打开 [阿里云百炼控制台](https://bailian.console.aliyun.com/)，登录（国际站同样可用）
 2. 左侧进入「API-KEY」，创建一个 Key，复制
-3. 粘贴到 `.env` 里：`DASHSCOPE_API_KEY=sk-xxxx`
+3. 回到终端粘贴（输入时不显示），Key 会保存在 `~/.config/cherina-pod/.env`，只有你自己能读
+
+也可以手动配置：`cp .env.example .env`，在里面填 `DASHSCOPE_API_KEY=sk-xxxx`。
 
 想换成别的翻译模型（比如 DeepSeek 官方、OpenAI），在 `.env` 里另填 `LLM_BASE_URL`、`LLM_API_KEY`、`LLM_MODEL` 即可，见 [.env.example](.env.example)。
 
@@ -98,6 +121,14 @@ python3 scripts/lesson.py --doctor
 ```
 
 最后一行全是 `"ok": true` 就可以开始了。哪一项是 `false`，后面的 `fix` 会告诉你怎么修。
+
+### 3.5 不知道听什么？
+
+```bash
+python3 scripts/lesson.py --recommend --level 四级
+```
+
+会按你的水平推荐 6 档播客，并给出可以直接用的来源地址。也可以直接看下面的[播客推荐](#去哪里找播客)。
 
 ### 4. 生成第一节课
 
@@ -114,8 +145,22 @@ RESULT {"ok": true, "title": "Is aircon the answer to a heating world?", "player
 ### 5. 开始练
 
 ```bash
-open episodes/<这一期的目录>/player.html      # Windows：start，Linux：xdg-open
+open episodes/index.html      # 课程库；Windows 用 start，Linux 用 xdg-open
 ```
+
+在课程库里点「继续练习」，或者直接打开某一期的 `player.html`。
+
+### 6. 在手机上练
+
+三种方式，任选一种：
+
+| 方式 | 怎么做 | 适合 |
+|---|---|---|
+| **单文件** | 20 分钟以内的节目会自动生成 `share/<期名>.html`（音频已内嵌，几 MB），用微信、AirDrop 发到手机，用浏览器打开 | 短节目、发给朋友 |
+| **局域网** | 电脑上运行 `python3 scripts/lesson.py --serve`，手机连同一个 Wi-Fi，打开它打印出的地址 | 在家用，所有课和进度都在 |
+| **长节目分段** | `python3 scripts/lesson.py "<来源>" --phone --parts 1-3`，只打包前 3 段 | 一小时的长节目 |
+
+> iPhone 上请用 Safari 打开单文件（在微信里点开后选「在 Safari 中打开」，或在「文件」App 里长按 → 共享 → Safari）。
 
 ## 使用教程
 
@@ -145,7 +190,8 @@ python3 scripts/lesson.py "6 Minute English" --episode "gold"    # 标题里含 
 |---|---|
 | `--level "雅思 6"` | 按你的水平挑难点表达，例如 `四级`、`六级`、`雅思 6`、`高中` |
 | `--lang zh-en` | 中文播客配英文译文（给学中文的外国朋友用）；默认 `en-zh` |
-| `--no-notes` | 不生成难点表达（省一次模型调用） |
+| `--no-notes` | 不调用模型：不生成难点表达，也不识别广告 |
+| `--phone` / `--parts 1-3` | 强制生成手机单文件 / 只打包这几段 |
 
 ### 精听网页怎么用
 
@@ -158,6 +204,9 @@ python3 scripts/lesson.py "6 Minute English" --episode "gold"    # 标题里含 
 | 跳到某一句 | 点进度条上对应的那一格 | 同左 |
 | 切换段落 | 点左上角「第 N 段」 | 同左 |
 | 看全文、难点表达 | 右上角 ☰ | 右侧常驻 |
+| 收藏这一句 | 精听或对照时，句子下方的书签 | 同左 |
+| 分享成绩 | 练完一段后的「分享成绩」 | 同左（下载图片） |
+| 回到课程库 | 右上角 ⊞ | 同左 |
 | 切换步骤 | 顶部四个按钮 | `1`–`4` |
 
 要在手机上练：把整个期目录（`player.html` 和 `audio/` 文件夹一起）传到手机，用浏览器打开 `player.html`。
@@ -183,13 +232,17 @@ bash scripts/batch_add.sh
 默认在 `episodes/<这一期>/`：
 
 ```
-episodes/why-has-gold-got-so-expensive/
-├── player.html        精听网页（双击打开）
-├── handout.html       打印讲义
-├── notes.md           难点笔记
-├── audio/episode.mp4  音频（AAC 64k 单声道）
-├── bilingual.json     原文 + 译文 + 时间戳
-└── transcript.json    词级时间戳（重新转写要花钱，请自行备份）
+episodes/
+├── index.html                       课程库（所有课、打卡、收藏、复习）
+└── why-has-gold-got-so-expensive/
+    ├── player.html                  精听网页（双击打开）
+    ├── share/*.html                 手机单文件（音频内嵌）
+    ├── handout.html                 打印讲义
+    ├── notes.md                     难点笔记
+    ├── ads.json                     识别出的广告句
+    ├── audio/episode.mp4            音频（AAC 64k 单声道）
+    ├── bilingual.json               原文 + 译文 + 时间戳
+    └── transcript.json              词级时间戳（重新转写要花钱，请自行备份）
 ```
 
 设置环境变量 `CHERINA_POD_OUT=/你想放的目录` 可以改到别处。
@@ -229,25 +282,28 @@ cherina-pod 支持**有公开 RSS 的播客**（绝大多数播客都有）。Sp
 | 难度 | 播客 | 特点 |
 |---|---|---|
 | 入门 | [BBC Learning English: 6 Minute English](https://www.bbc.co.uk/learningenglish/english/features/6-minute-english) | 每期 6 分钟，英音，主持人会解释生词 |
-| 入门 | [VOA Learning English](https://learningenglish.voanews.com/) | 慢速新闻，美音，用词有限 |
-| 入门 | Real Easy English | 语速慢，日常话题 |
+| 入门 | [VOA Learning English](https://learningenglish.voanews.com/)（American Stories） | 慢速朗读，美音，用词有限 |
+| 入门 | Easy English（Isi & Mitch） | 两位主持人的日常对话，语速慢 |
+| 入门 | English Learning for Curious Minds | 慢速讲有趣的故事和知识 |
 | 中级 | [All Ears English](https://www.allearsenglish.com/) | 美式口语、地道表达 |
-| 中级 | Coffee Break English | 分级课程，讲解清楚 |
+| 中级 | Luke's English Podcast | 英国老师的长篇闲聊，幽默 |
 | 中级 | [TED Talks Daily](https://www.ted.com/podcasts/ted-talks-daily) | 演讲，话题广，发音清晰 |
 | 中级 | The Psychology of your 20s | 年轻人话题，口条清楚 |
 | 进阶 | [Hidden Brain](https://hiddenbrain.org/) | 心理学叙事，NPR 制作 |
 | 进阶 | [The Daily](https://www.nytimes.com/column/the-daily)（纽约时报） | 新闻深度，正常语速 |
+| 进阶 | Planet Money / Freakonomics Radio | 经济学故事和访谈 |
+| 进阶 | Radiolab | 科学与哲学故事，音效丰富 |
 | 进阶 | [This American Life](https://www.thisamericanlife.org/) | 真实故事，口语多、语速快 |
 
-建议选**能听懂 70%–80%** 的节目：太简单练不到东西，太难会放弃。网页里每段都标了语速（词/分），可以参考。
+这些节目都收录在 `scripts/catalog.json` 里，`--recommend` 会从中挑选。建议选**能听懂 70%–80%** 的节目：太简单练不到东西，太难会放弃。网页里每段都标了语速（词/分），可以参考。
 
 ### 适合学中文的播客（`--lang zh-en`）
 
 | 播客 | 特点 |
 |---|---|
 | Coffee Break Chinese | 面向英语母语者的分级中文课 |
-| Mandarin Corner | 真实场景对话，有不同难度 |
-| Slow Chinese（慢速中文） | 语速慢，话题是中国日常和文化 |
+| Mandarin Blueprint | 学习方法与中文对话 |
+| Slow Chinese Podcast（慢速汉语） | 语速慢，话题是中国日常和文化 |
 
 ## 工作原理
 
@@ -273,6 +329,12 @@ lesson.py
 
 ## 常见问题
 
+**广告识别错了怎么办？**
+宁可漏标，不会误删正文：单句、不在片头片尾、也没有广告用语的不会被删。想保留全部原文，用 `python3 scripts/build_lesson.py episodes/<目录> --keep-ads` 重新生成。
+
+**学习记录存在哪？换浏览器还在吗？**
+存在浏览器本地（localStorage），不上传。换浏览器或清除浏览器数据会丢失。用 `--serve` 在手机上练时，记录存在手机浏览器里。
+
 **要花多少钱？**
 费用全部来自你自己的阿里云百炼账户：转写按语音时长计费（只计有人声的部分），翻译和难点表达按 token 计费，具体单价以[百炼官方计费说明](https://help.aliyun.com/zh/model-studio/billing-for-model-studio)为准。新账户通常有免费额度。已经转写过的期重新生成网页和讲义不会再产生转写费用。
 
@@ -290,6 +352,8 @@ ASR 偶尔会听错人名和专有名词（比如把 Ira Glass 听成 “I remem
 欢迎提 Issue 和 PR，见 [CONTRIBUTING.md](CONTRIBUTING.md)。特别欢迎：
 
 - 本地 ASR 适配（mlx-whisper / faster-whisper），让转写也免费
+- 听写模式（打字输入，和原文逐词比对）
+- Anki 导出（带原句音频）
 - 更多语言对的使用反馈
 - 你在用的、适合精听的播客推荐
 

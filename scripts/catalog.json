@@ -1,0 +1,155 @@
+[
+ {
+  "name": "6 Minute English",
+  "title": "6 Minute English",
+  "lang": "en",
+  "level": "beginner",
+  "accent": "英音",
+  "why": "BBC 出品，每期 6 分钟，主持人解释生词",
+  "feed": "https://podcasts.files.bbci.co.uk/p02pc9tn.rss"
+ },
+ {
+  "name": "VOA American Stories",
+  "title": "American Stories - VOA Learning English",
+  "lang": "en",
+  "level": "beginner",
+  "accent": "美音",
+  "why": "VOA 慢速朗读的美国短篇故事",
+  "feed": "https://learningenglish.voanews.com/podcast/?zoneId=1581"
+ },
+ {
+  "name": "Easy English (Isi & Mitch)",
+  "title": "Easy English: Learn English with everyday conversations",
+  "lang": "en",
+  "level": "beginner",
+  "accent": "美音",
+  "why": "两位主持人的日常对话，语速慢",
+  "feed": "https://feeds.fireside.fm/easyenglish/rss"
+ },
+ {
+  "name": "English Learning for Curious Minds",
+  "title": "English Learning for Curious Minds | A More Interesting Way To Learn English",
+  "lang": "en",
+  "level": "beginner",
+  "accent": "英音",
+  "why": "慢速讲有趣的故事和知识",
+  "feed": "https://feeds.transistor.fm/leonardo-english-english-language-learning-for-curious-minds"
+ },
+ {
+  "name": "All Ears English Podcast",
+  "title": "All Ears English Podcast",
+  "lang": "en",
+  "level": "intermediate",
+  "accent": "美音",
+  "why": "美式口语与地道表达",
+  "feed": "https://feeds.megaphone.fm/allearsenglish"
+ },
+ {
+  "name": "Luke's English Podcast",
+  "title": "Luke's ENGLISH Podcast - Learn British English with Luke Thompson",
+  "lang": "en",
+  "level": "intermediate",
+  "accent": "英音",
+  "why": "英国老师的长篇闲聊，幽默",
+  "feed": "https://feeds.acast.com/public/shows/62b0ada25c7ea10012f541cb"
+ },
+ {
+  "name": "TED Talks Daily",
+  "title": "TED Talks Daily",
+  "lang": "en",
+  "level": "intermediate",
+  "accent": "多口音",
+  "why": "演讲，话题广，发音清晰",
+  "feed": "https://feeds.acast.com/public/shows/67587e77c705e441797aff96"
+ },
+ {
+  "name": "The Psychology of your 20s",
+  "title": "The Psychology of your 20s",
+  "lang": "en",
+  "level": "intermediate",
+  "accent": "英音",
+  "why": "年轻人心理话题，口条清楚",
+  "feed": "https://www.omnycontent.com/d/playlist/e73c998e-6e60-432f-8610-ae210140c5b1/bc44988a-a82a-4291-ab8b-afdd01187fa8/39e2f432-53df-43b8-a7b9-afdd01187fc4/podcast.rss"
+ },
+ {
+  "name": "Hidden Brain",
+  "title": "Hidden Brain",
+  "lang": "en",
+  "level": "advanced",
+  "accent": "美音",
+  "why": "心理学叙事，NPR 制作",
+  "feed": "https://feeds.simplecast.com/kwWc0lhf"
+ },
+ {
+  "name": "Planet Money",
+  "title": "Planet Money",
+  "lang": "en",
+  "level": "advanced",
+  "accent": "美音",
+  "why": "经济学故事，节奏快",
+  "feed": "https://feeds.npr.org/510289/podcast.xml"
+ },
+ {
+  "name": "Freakonomics Radio",
+  "title": "Freakonomics Radio",
+  "lang": "en",
+  "level": "advanced",
+  "accent": "美音",
+  "why": "经济学访谈",
+  "feed": "https://feeds.simplecast.com/Y8lFbOT4"
+ },
+ {
+  "name": "The Daily",
+  "title": "The Daily",
+  "lang": "en",
+  "level": "advanced",
+  "accent": "美音",
+  "why": "纽约时报新闻深度报道",
+  "feed": "https://feeds.simplecast.com/Sl5CSM3S"
+ },
+ {
+  "name": "This American Life",
+  "title": "This American Life",
+  "lang": "en",
+  "level": "advanced",
+  "accent": "美音",
+  "why": "真实故事，口语多、语速快",
+  "feed": "https://www.thisamericanlife.org/podcast/rss.xml"
+ },
+ {
+  "name": "Radiolab",
+  "title": "Radiolab",
+  "lang": "en",
+  "level": "advanced",
+  "accent": "美音",
+  "why": "科学与哲学故事，音效丰富",
+  "feed": "https://feeds.simplecast.com/EmVW7VGp"
+ },
+ {
+  "name": "Coffee Break Chinese",
+  "title": "Coffee Break Chinese",
+  "lang": "zh",
+  "level": "beginner",
+  "accent": "普通话",
+  "why": "面向英语母语者的分级中文课",
+  "feed": "https://feeds.acast.com/public/shows/58cc3ec5-b23c-4de1-b8cb-21d229533dd9"
+ },
+ {
+  "name": "Mandarin Blueprint",
+  "title": "Mandarin Blueprint",
+  "lang": "zh",
+  "level": "intermediate",
+  "accent": "普通话",
+  "why": "学习方法与中文对话",
+  "feed": "https://www.mandarinblueprint.com/feed/podcast/"
+ },
+ {
+  "name": "Slow Chinese Podcast (慢速汉语)",
+  "title": "Slow Chinese Podcast - 慢速汉语 Learn Chinese 学中文",
+  "lang": "zh",
+  "level": "beginner",
+  "accent": "普通话",
+  "why": "慢速中文，讲中国日常和文化",
+  "feed": "https://anchor.fm/s/5669fedc/podcast/rss"
+ }
+]

@@ -19,6 +19,8 @@
 - 语言对是配置项：`--source-lang`（默认 auto）/ `--target-lang`（默认 zh）；数据键名一律 `source` / `target`，读入兼容旧格式 `en` / `zh` / `title_zh`。界面语言跟随译文语言（中文译文 → 中文界面，否则英文界面）。
 - 翻译遵循信达雅，逐句输出 `{source, target}`；`translation.json` 的 source 必须回填 transcript 原文。
 - 难点表达必须能在原句中原样找到，对不上的条目直接丢弃。
+- 广告识别结果缓存在 `ads.json`（原文列表），课里删除这些句子并重新编号；播放时句间空隙 > 0.8 秒自动跳过。宁可漏标，不能误删正文。
+- 学习记录存在浏览器 localStorage：`cherina-lesson:<id>`（单课进度）、`cherina-pod:activity`（每日时长与完成段数）、`cherina-pod:saved`（收藏与复习排期）、`cherina-pod:last`（上次练的课）。改键名要同时改 player.html 和 index.html。
 - 密钥只放 `.env`（gitignore），绝不进仓库、不打印。查找顺序：当前目录、仓库根目录、`~/.config/cherina-pod/.env`。
 - 产物目录默认 `episodes/`，环境变量 `CHERINA_POD_OUT` 可覆盖。
 - `lesson.py` 的 RESULT 契约（`ok` / `stage` / `error` / `fix` 及成功字段）是 SKILL.md 依赖的接口，改动要同步 SKILL.md。
@@ -36,7 +38,11 @@
 python3 scripts/lesson.py --doctor                          # 检查环境与密钥
 python3 scripts/lesson.py "播客名或RSS" --list                # 列单集
 python3 scripts/lesson.py "播客名或RSS" --episode 1 --level 四级 # 一键生成精听课
-python3 scripts/build_lesson.py episodes/<id>               # 只重新生成精听课
+python3 scripts/lesson.py --recommend --level 四级            # 推荐播客（scripts/catalog.json）
+python3 scripts/lesson.py --setup                           # 交互式填密钥
+python3 scripts/lesson.py --serve                           # 局域网课程库，手机直接练
+python3 scripts/build_lesson.py episodes/<id>               # 只重新生成精听课（含课程库 index.html）
+python3 scripts/build_lesson.py episodes/<id> --single-file --parts 1-3   # 手机单文件
 python3 scripts/build_lesson.py episodes/<id> --no-notes                # 不调用 LLM
 bash scripts/batch_add.sh                                               # 批量（scripts/batch_jobs.txt）
 ```
